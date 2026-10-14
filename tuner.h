@@ -69,10 +69,14 @@ private:
   unsigned wantSeqM;
   bool wantReleaseM;
   std::set<int> wantPidsM;
+  std::set<int> wantPmtM;      // PMT PIDs of the services the CI should decrypt
+  int wantCiSlotM;
   // session state (control thread only)
   cVtRtsp rtspM;
   std::set<int> activePidsM;
   std::string activeParamsM;
+  std::set<int> activePmtM;
+  bool sessionHadPmtM;
   cTimeMs keepAliveM;
   cVtReceiver receiverM;
   // status (read by other threads)
@@ -87,8 +91,9 @@ private:
 
   std::set<int> WantedPids(void);     // with standard PIDs, mutexM must be held
   static std::string JoinPids(const std::set<int> &pidsP);
-  bool DoTune(const std::string &paramsP, const std::set<int> &pidsP);
-  bool DoPids(const std::set<int> &wantP);
+  static std::string CiParams(const std::set<int> &pmtP, int ciSlotP);
+  bool DoTune(const std::string &paramsP, const std::set<int> &pidsP, const std::set<int> &pmtP, int ciSlotP);
+  bool DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP);
   void DoRelease(void);
   void DropSession(void);
   void OnTsPayload(const uchar *dataP, int lenP);
@@ -99,7 +104,9 @@ public:
   explicit cVtTuner(cVtTunerSink &sinkP);
   virtual ~cVtTuner();
   // params: SAT>IP query string without leading '?', e.g. "src=1&freq=11493&pol=h&msys=dvbs2..."
-  void SetChannel(const char *paramsP);
+  // ciSlotP > 0: decrypt with this CI slot of the server (x_ci), pmtPidP: PMT PID of the service (0 = not known yet)
+  void SetChannel(const char *paramsP, int ciSlotP = 0, int pmtPidP = 0);
+  void SetPmt(int pmtPidP);
   void SetPid(int pidP, bool onP);
   void Release(void);
   bool HasLock(void) const { return acceptM.load() && lockM.load(); }

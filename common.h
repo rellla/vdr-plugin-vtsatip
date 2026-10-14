@@ -20,6 +20,8 @@
 #define VTSATIP_DEFAULT_RTSP_PORT 554
 #define VTSATIP_MAX_DEVICES       MAXDEVICES
 #define VTSATIP_TSBUFFER_SIZE     KILOBYTE(4096)
+#define VTSATIP_MAX_CI_SLOTS      4
+#define VTSATIP_MAX_CAIDS         16
 
 // Source types a device may provide (bit mask)
 #define VTSATIP_SYS_SAT   0x01
@@ -43,15 +45,28 @@ struct cVtSatipConfig {
   bool realtime;
   int trace;
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
+  // CI extension (x_pmt / x_ci)
+  bool ciExtension;
+  bool ciRestart;                    // restart the stream if the "CI state" of a session changes
+  int ciSlot[VTSATIP_MAX_DEVICES];   // CI slot (1..VTSATIP_MAX_CI_SLOTS) used by a device, 0 = none
+  int caids[VTSATIP_MAX_CI_SLOTS][VTSATIP_MAX_CAIDS + 1]; // zero terminated CA ID lists per slot
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
     rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true),
-    realtime(true), trace(0)
+    realtime(true), trace(0), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
-        frontend[i] = 0;
+        frontend[i] = ciSlot[i] = 0;
+    for (int i = 0; i < VTSATIP_MAX_CI_SLOTS; ++i)
+        for (int j = 0; j <= VTSATIP_MAX_CAIDS; ++j)
+            caids[i][j] = 0;
   }
+  // "0x1000;0x2000,0x2020": CA IDs of slot 1; CA IDs of slot 2
+  bool ParseCaIds(const char *strP);
+  cString CaIdsString(void) const;
+  bool ParseCiSlots(const char *strP);   // "1,2,0": CI slot per device
+  bool SlotProvidesCa(int slotP, const int *caidsP) const; // slotP: 1..N
 };
 
 extern cVtSatipConfig VtSatipConfig;

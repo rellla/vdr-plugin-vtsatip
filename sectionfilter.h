@@ -45,6 +45,8 @@ public:
   bool IsValid(void) const { return socketM[0] >= 0 && socketM[1] >= 0; }
   void Process(const uint8_t *dataP);
   bool Flush(void);                    // true if data is still pending
+  void Reset(void);                    // forget partial data and pending sections
+  bool Pop(std::string &sectionP);      // take the next finished section (instead of sending it)
   int Fd(void) const { return socketM[0]; }
   int SendFd(void) const { return socketM[1]; }
   uint16_t Pid(void) const { return pidM; }

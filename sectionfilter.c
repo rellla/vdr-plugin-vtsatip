@@ -116,6 +116,23 @@ void cVtSecFilter::Process(const uint8_t *dataP)
      CopyDump(&dataP[p], count);
 }
 
+void cVtSecFilter::Reset(void)
+{
+  pusiSeenM = 0;
+  feedCcM = 0;
+  New();
+  pendingM.clear();
+}
+
+bool cVtSecFilter::Pop(std::string &sectionP)
+{
+  if (pendingM.empty())
+     return false;
+  sectionP = pendingM.front();
+  pendingM.pop_front();
+  return true;
+}
+
 bool cVtSecFilter::Flush(void)
 {
   while (!pendingM.empty()) {

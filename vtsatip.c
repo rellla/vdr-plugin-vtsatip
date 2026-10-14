@@ -58,6 +58,13 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -f LIST,  --frontend=LIST\n"
          "                           fixed server frontend (1..N) for each device, comma separated,\n"
          "                           0 = let the server decide (default), e.g. -f 1,2\n"
+         "  -c CAIDS, --caids=CAIDS  CI extension: CA IDs supported by each CI slot of the server,\n"
+         "                           ids separated by comma, slots by semicolon,\n"
+         "                           e.g. -c '0x1830,0x1843;0x0500' (slot 1; slot 2)\n"
+         "  -i LIST,  --ciassign=LIST\n"
+         "                           CI slot (1..4) used by each device, 0 = none, e.g. -i 1,0\n"
+         "  -Q,       --noci-restart do not restart a stream when its CI state changes\n"
+         "                           (default: restart, needed by e.g. Digital Devices OctopusNet)\n"
          "  -p START-END, --portrange=START-END\n"
          "                           RTP/RTCP port range (default 45000-47000)\n"
          "  -r SIZE,  --rcvbuf=SIZE  RTP socket receive buffer in bytes (default 2097152)\n"
@@ -144,6 +151,9 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "devices",      required_argument, NULL, 'd' },
     { "delsys",       required_argument, NULL, 'D' },
     { "frontend",     required_argument, NULL, 'f' },
+    { "caids",        required_argument, NULL, 'c' },
+    { "ciassign",     required_argument, NULL, 'i' },
+    { "noci-restart", no_argument,       NULL, 'Q' },
     { "portrange",    required_argument, NULL, 'p' },
     { "rcvbuf",       required_argument, NULL, 'r' },
     { "nodisconnect", no_argument,       NULL, 'N' },
@@ -152,7 +162,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:d:D:f:p:r:NRt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:d:D:f:c:i:Qp:r:NRt:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -175,6 +185,23 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                break;
           case 'f':
                ParseFrontends(optarg);
+               break;
+          case 'c':
+               if (!VtSatipConfig.ParseCaIds(optarg)) {
+                  fprintf(stderr, "vtsatip: invalid CA ID list '%s'\n", optarg);
+                  return false;
+                  }
+               VtSatipConfig.ciExtension = true;
+               break;
+          case 'i':
+               if (!VtSatipConfig.ParseCiSlots(optarg)) {
+                  fprintf(stderr, "vtsatip: invalid CI slot assignment '%s'\n", optarg);
+                  return false;
+                  }
+               VtSatipConfig.ciExtension = true;
+               break;
+          case 'Q':
+               VtSatipConfig.ciRestart = false;
                break;
           case 'p':
                ParsePortRange(optarg);
@@ -205,6 +232,18 @@ bool cPluginVtSatip::Initialize(void)
      return false;
      }
   vtinfo("server %s:%d, %d device(s)", *VtSatipConfig.host, VtSatipConfig.port, VtSatipConfig.devices);
+  if (VtSatipConfig.ciExtension) {
+     bool assigned = false;
+     for (int i = 0; i < VtSatipConfig.devices; ++i)
+         assigned |= VtSatipConfig.ciSlot[i] > 0;
+     if (!assigned) {
+        // only -c given: slot n is used by device n-1
+        for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_CI_SLOTS; ++i)
+            if (VtSatipConfig.caids[i][0])
+               VtSatipConfig.ciSlot[i] = i + 1;
+        }
+     vtinfo("CI extension enabled, CA IDs: %s", *VtSatipConfig.CaIdsString());
+     }
   return cVtSatipDevice::Initialize(VtSatipConfig.devices);
 }
 

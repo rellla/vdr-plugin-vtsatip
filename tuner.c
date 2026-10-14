@@ -196,6 +196,8 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   tunePendingM(false),
   wantSeqM(0),
   wantReleaseM(false),
+  wantCiSlotM(0),
+  sessionHadPmtM(false),
   keepAliveM(),
   receiverM(*this),
   acceptM(false),
@@ -229,6 +231,7 @@ cVtTuner::~cVtTuner()
 std::set<int> cVtTuner::WantedPids(void)
 {
   std::set<int> pids = wantPidsM;
+  pids.insert(wantPmtM.begin(), wantPmtM.end()); // the CI needs the PMT in the stream
   for (int i = 0; i < VTSATIP_STDPID_COUNT; ++i)
       pids.insert(VtSatipStdPids[i]);
   return pids;
@@ -245,21 +248,40 @@ std::string cVtTuner::JoinPids(const std::set<int> &pidsP)
   return s.empty() ? std::string("none") : s;
 }
 
-void cVtTuner::SetChannel(const char *paramsP)
+void cVtTuner::SetChannel(const char *paramsP, int ciSlotP, int pmtPidP)
 {
   mutexM.Lock();
   if (isempty(paramsP)) {
      wantReleaseM = true;
      tunePendingM = false;
      wantParamsM.clear();
+     wantPmtM.clear();
+     wantCiSlotM = 0;
      }
   else {
+     if (wantParamsM != paramsP)
+        wantPmtM.clear(); // other transponder: the old services are gone
+     if (ciSlotP > 0) {
+        wantCiSlotM = ciSlotP;
+        if (pmtPidP > 0 && pmtPidP < 8191)
+           wantPmtM.insert(pmtPidP);
+        }
      wantParamsM = paramsP;
      tunePendingM = true;
      wantReleaseM = false;
      ++wantSeqM;
      }
   condM.Broadcast();
+  mutexM.Unlock();
+}
+
+void cVtTuner::SetPmt(int pmtPidP)
+{
+  if (pmtPidP <= 0 || pmtPidP >= 8191)
+     return;
+  mutexM.Lock();
+  if (wantCiSlotM > 0 && wantPmtM.insert(pmtPidP).second)
+     condM.Broadcast();
   mutexM.Unlock();
 }
 
@@ -284,6 +306,8 @@ void cVtTuner::Release(void)
   wantReleaseM = true;
   tunePendingM = false;
   wantParamsM.clear();
+  wantPmtM.clear();
+  wantCiSlotM = 0;
   condM.Broadcast();
   mutexM.Unlock();
 }
@@ -305,6 +329,8 @@ void cVtTuner::DropSession(void)
      rtspM.Close();
      }
   activePidsM.clear();
+  activePmtM.clear();
+  sessionHadPmtM = false;
   activeParamsM.clear();
   strengthM = qualityM = -1;
   levelM = 0;
@@ -366,13 +392,27 @@ static std::string NormalizeParams(const std::string &inP)
   return out;
 }
 
-bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP)
+std::string cVtTuner::CiParams(const std::set<int> &pmtP, int ciSlotP)
+{
+  if (pmtP.empty() || ciSlotP <= 0)
+     return std::string();
+  return "&x_pmt=" + JoinPids(pmtP) + "&x_ci=" + std::to_string(ciSlotP);
+}
+
+bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, const std::set<int> &pmtP, int ciSlotP)
 {
   std::string params = paramsP;
   int fe = VtSatipConfig.frontend[indexM];
   if (fe > 0 && params.find("fe=") == std::string::npos)
      params += "&fe=" + std::to_string(fe);
   params = NormalizeParams(params);
+
+  // Some servers (Digital Devices Octopus) can only attach the CI when the stream
+  // was started with x_pmt, and release it only when the session is torn down.
+  if (VtSatipConfig.ciRestart && rtspM.HasSession() && sessionHadPmtM != !pmtP.empty() && params != activeParamsM) {
+     vtdebug("device %d: CI state changes, restarting the session", indexM);
+     DropSession();
+     }
 
   // same transponder, session is running -> nothing to do, keep the lock
   if (rtspM.HasSession() && params == activeParamsM) {
@@ -392,13 +432,14 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP)
      if (!rtspM.Connect(VtSatipConfig.host, VtSatipConfig.port))
         return false;
      if (!rtspM.Options() ||
-         !rtspM.Setup((params + "&pids=none").c_str(), receiverM.RtpPort(), receiverM.RtcpPort())) {
+         !rtspM.Setup((params + "&pids=none" + CiParams(pmtP, ciSlotP)).c_str(), receiverM.RtpPort(), receiverM.RtcpPort())) {
         DropSession();
         return false;
         }
      sessionUpM = true;
+     sessionHadPmtM = !pmtP.empty();
      }
-  std::string query = params + "&pids=" + JoinPids(pidsP);
+  std::string query = params + "&pids=" + JoinPids(pidsP) + CiParams(pmtP, ciSlotP);
   vtdebug("device %d: tune %s", indexM, query.c_str());
   if (!rtspM.Play(query.c_str())) {
      DropSession();
@@ -406,6 +447,7 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP)
      }
   activeParamsM = params;
   activePidsM = pidsP;
+  activePmtM = pmtP;
   int ka = rtspM.SessionTimeout() - 5;
   if (ka < eMinKeepAliveSec)
      ka = eMinKeepAliveSec;
@@ -414,7 +456,7 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP)
   return true;
 }
 
-bool cVtTuner::DoPids(const std::set<int> &wantP)
+bool cVtTuner::DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP)
 {
   std::string add, del;
   for (std::set<int>::const_iterator it = wantP.begin(); it != wantP.end(); ++it)
@@ -423,17 +465,21 @@ bool cVtTuner::DoPids(const std::set<int> &wantP)
   for (std::set<int>::const_iterator it = activePidsM.begin(); it != activePidsM.end(); ++it)
       if (!wantP.count(*it))
          del += (del.empty() ? "" : ",") + std::to_string(*it);
-  if (add.empty() && del.empty())
+  std::string ci = CiParams(pmtP, ciSlotP);
+  if (add.empty() && del.empty() && (ci.empty() || pmtP == activePmtM))
      return true;
   std::string query;
   if (!add.empty())
      query = "addpids=" + add;
   if (!del.empty())
      query += std::string(query.empty() ? "" : "&") + "delpids=" + del;
+  if (!ci.empty())
+     query += std::string(query.empty() ? "" : "&") + ci.substr(1);
   vtdebug("device %d: pids %s", indexM, query.c_str());
   if (!rtspM.Play(query.c_str()))
      return false;
   activePidsM = wantP;
+  activePmtM = pmtP;
   return true;
 }
 
@@ -453,8 +499,10 @@ void cVtTuner::Action(void)
            std::string params = wantParamsM;
            unsigned seq = wantSeqM;
            std::set<int> pids = WantedPids();
+           std::set<int> pmt = wantPmtM;
+           int ci = wantCiSlotM;
            mutexM.Unlock();
-           bool ok = DoTune(params, pids);
+           bool ok = DoTune(params, pids, pmt, ci);
            mutexM.Lock();
            if (ok) {
               if (wantSeqM == seq)
@@ -466,9 +514,20 @@ void cVtTuner::Action(void)
            }
         if (rtspM.HasSession()) {
            std::set<int> want = WantedPids();
-           if (want != activePidsM) {
+           if (VtSatipConfig.ciRestart && wantCiSlotM > 0 && !wantPmtM.empty() && !sessionHadPmtM) {
+              // the CI can only be attached to a stream that was started with x_pmt
+              vtdebug("device %d: PMT known now, restarting the session for the CI", indexM);
               mutexM.Unlock();
-              bool ok = DoPids(want);
+              DropSession();
+              mutexM.Lock();
+              tunePendingM = !wantParamsM.empty();
+              continue;
+              }
+           if (want != activePidsM || (wantCiSlotM > 0 && wantPmtM != activePmtM)) {
+              std::set<int> pmt = wantPmtM;
+              int ci = wantCiSlotM;
+              mutexM.Unlock();
+              bool ok = DoPids(want, pmt, ci);
               mutexM.Lock();
               if (!ok) {
                  vterror("device %d: PID update failed, will retune", indexM);
@@ -557,9 +616,11 @@ cString cVtTuner::GetInformation(void)
   mutexM.Lock();
   std::string params = wantParamsM;
   size_t pids = wantPidsM.size();
+  std::string pmt = wantPmtM.empty() ? std::string("-") : JoinPids(wantPmtM);
+  int ci = wantCiSlotM;
   mutexM.Unlock();
-  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu pids=%zu params=%s",
+  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu pids=%zu ci=%d pmt=%s params=%s",
                           sessionUpM.load() ? "up" : "down", (int)acceptM.load(), (int)lockM.load(),
                           frontendM.load(), strengthM.load(), qualityM.load(), bytesM.load(),
-                          pids, params.c_str());
+                          pids, ci, pmt.c_str(), params.c_str());
 }

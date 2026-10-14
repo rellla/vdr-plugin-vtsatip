@@ -21,7 +21,11 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
   secHandlerM(NULL),
   tunerM(NULL),
   createdM(0),
-  overflowsM(0)
+  overflowsM(0),
+  patWantedM(false),
+  tunedSourceM(0),
+  tunedTransponderM(0),
+  tunedSidM(0)
 {
   unsigned int bufsize = (unsigned int)VTSATIP_TSBUFFER_SIZE;
   bufsize -= (bufsize % TS_SIZE);
@@ -69,8 +73,9 @@ cVtSatipDevice *cVtSatipDevice::GetDevice(unsigned int indexP)
 
 cString cVtSatipDevice::GetInformation(void)
 {
-  return cString::sprintf("vtSAT>IP device %u (CardIndex %d)\n  tuner: %s\n  overflows: %lu\n  section filters: %d\n  last channel: %s\n",
-                          indexM, CardIndex(), tunerM ? *tunerM->GetInformation() : "-",
+  return cString::sprintf("vtSAT>IP device %u (CardIndex %d)%s\n  tuner: %s\n  overflows: %lu\n  section filters: %d\n  last channel: %s\n",
+                          indexM, CardIndex(), CiSlot() > 0 ? *cString::sprintf(" with CI slot %d", CiSlot()) : "",
+                          tunerM ? *tunerM->GetInformation() : "-",
                           overflowsM, secHandlerM ? secHandlerM->Count() : 0,
                           channelM.GetChannelID() == tChannelID::InvalidID ? "none" : channelM.Name());
 }
@@ -97,10 +102,36 @@ void cVtSatipDevice::OnTsData(const uchar *dataP, int lengthP)
      }
   if (secHandlerM && secHandlerM->HasFilters())
      secHandlerM->Write(dataP, lengthP);
+  if (patWantedM.load())
+     FeedPat(dataP, lengthP);
+}
+
+// The PAT tells us the PMT PID of the encrypted service; the CI of the server needs it (x_pmt).
+void cVtSatipDevice::FeedPat(const uchar *dataP, int lengthP)
+{
+  std::map<int, int> programs;
+  for (int i = 0; i + TS_SIZE <= lengthP; i += TS_SIZE) {
+      if (dataP[i] != TS_SYNC_BYTE || VtTsPid(dataP + i) != 0)
+         continue;
+      if (patM.Process(dataP + i, programs)) {
+         int source = tunedSourceM.load();
+         int transponder = tunedTransponderM.load();
+         for (std::map<int, int>::const_iterator it = programs.begin(); it != programs.end(); ++it)
+             cVtPmtCache::Set(source, transponder, it->first, it->second);
+         int pmt = cVtPmtCache::Get(source, transponder, tunedSidM.load());
+         if (pmt > 0 && tunerM) {
+            vtdebug("device %u: PMT PID %d for service %d", indexM, pmt, tunedSidM.load());
+            tunerM->SetPmt(pmt);
+            patWantedM = false;
+            }
+         break;
+         }
+      }
 }
 
 void cVtSatipDevice::OnRetune(void)
 {
+  patM.Reset();
   if (tsBufferM)
      tsBufferM->Clear();
   if (secHandlerM)
@@ -176,18 +207,27 @@ bool cVtSatipDevice::ProvidesChannel(const cChannel *channelP, int priorityP, bo
   bool hasPriority = (priorityP == IDLEPRIORITY) || (priorityP > this->Priority());
   bool needsDetachReceivers = false;
 
-  if (channelP && ProvidesTransponder(channelP)) {
+  // A device with an own CI must not claim encrypted channels its CI cannot decrypt:
+  // VDR assumes that devices with an internal CAM take care of it.
+  bool ciMismatch = channelP && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && !ProvidesCa(channelP->Caids());
+  if (channelP && !ciMismatch && ProvidesTransponder(channelP)) {
      result = hasPriority;
      if (priorityP > IDLEPRIORITY && Receiving()) {
         if (IsTunedToTransponder(channelP)) {
            if ((channelP->Vpid() && !HasPid(channelP->Vpid())) ||
                (channelP->Apid(0) && !HasPid(channelP->Apid(0))) ||
                (channelP->Dpid(0) && !HasPid(channelP->Dpid(0)))) {
-              if (channelP->Ca() >= CA_ENCRYPTED_MIN && CamSlot()) {
-                 if (CamSlot()->CanDecrypt(channelP))
+              if (channelP->Ca() >= CA_ENCRYPTED_MIN) {
+                 if (CiSlot() > 0 && ProvidesCa(channelP->Caids()))
+                    result = true; // decrypted by the CI of the server
+                 else if (CamSlot()) {
+                    if (CamSlot()->CanDecrypt(channelP))
+                       result = true;
+                    else
+                       needsDetachReceivers = true;
+                    }
+                 else if (CiSlot() == 0)
                     result = true;
-                 else
-                    needsDetachReceivers = true;
                  }
               else
                  result = true; // another service of the transponder we are already tuned to
@@ -200,6 +240,21 @@ bool cVtSatipDevice::ProvidesChannel(const cChannel *channelP, int priorityP, bo
   if (needsDetachReceiversP)
      *needsDetachReceiversP = needsDetachReceivers;
   return result;
+}
+
+int cVtSatipDevice::CiSlot(void) const
+{
+  return VtSatipConfig.ciExtension ? VtSatipConfig.ciSlot[indexM] : 0;
+}
+
+bool cVtSatipDevice::ProvidesCa(const int *caidsP) const
+{
+  return VtSatipConfig.SlotProvidesCa(CiSlot(), caidsP);
+}
+
+bool cVtSatipDevice::HasInternalCam(void)
+{
+  return CiSlot() > 0;
 }
 
 bool cVtSatipDevice::ProvidesEIT(void) const
@@ -276,8 +331,20 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   // No waiting for the tuner here: the tuning request is handed to the tuner
   // thread and the lock is detected from the first TS packet. This keeps
   // channel switching as fast as with vtuner-ng.
+  int ci = 0;
+  int pmt = 0;
+  if (channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids())) {
+     ci = CiSlot();
+     pmt = cVtPmtCache::Get(channelP->Source(), channelP->Transponder(), channelP->Sid());
+     }
+  tunedSourceM = channelP->Source();
+  tunedTransponderM = channelP->Transponder();
+  tunedSidM = channelP->Sid();
+  patM.Reset();
+  patWantedM = (ci > 0 && pmt == 0); // learn the PMT PID from the PAT
   channelM = *channelP;
-  tunerM->SetChannel(*params);
+  vtdebug("device %u: '%s' ci=%d pmt=%d", indexM, channelP->Name(), ci, pmt);
+  tunerM->SetChannel(*params, ci, pmt);
   return true;
 }
 

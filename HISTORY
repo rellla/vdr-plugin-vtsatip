@@ -1,0 +1,15 @@
+VDR Plugin 'vtsatip' Revision History
+-------------------------------------
+
+2026-10-14: Version 0.2.0
+- CI/CAM support through the SAT>IP x_pmt/x_ci extension (-c, -i, -Q),
+  PMT PID detection from the PAT, PMT cache, session restart for servers
+  that need x_pmt in SETUP.
+- Test suite (tests/run_tests.sh) against a fake SAT>IP server.
+
+2026-10-14: Version 0.1.2
+- SETUP/PLAY query in the form vtuner-ng sends it (key order, fec and plts
+  always for DVB-S/S2, default RTSP port left out of the URL).
+
+2026-10-14: Version 0.1.0
+- Initial version.

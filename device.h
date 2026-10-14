@@ -5,10 +5,12 @@
 #ifndef __VTSATIP_DEVICE_H
 #define __VTSATIP_DEVICE_H
 
+#include <atomic>
 #include <vdr/device.h>
 #include "common.h"
 #include "tuner.h"
 #include "sectionfilter.h"
+#include "pat.h"
 
 class cVtSatipDevice : public cDevice, public cVtTunerSink {
 public:
@@ -30,11 +32,20 @@ private:
   cVtTuner *tunerM;
   cTimeMs createdM;
   unsigned long overflowsM;
+  // CI extension
+  cVtPatParser patM;
+  std::atomic<bool> patWantedM;
+  std::atomic<int> tunedSourceM;
+  std::atomic<int> tunedTransponderM;
+  std::atomic<int> tunedSidM;
 
   explicit cVtSatipDevice(unsigned int indexP);
   cVtSatipDevice(const cVtSatipDevice &);
   cVtSatipDevice &operator=(const cVtSatipDevice &);
 
+  int CiSlot(void) const;
+  bool ProvidesCa(const int *caidsP) const;
+  void FeedPat(const uchar *dataP, int lengthP);
   uchar *GetData(int *availableP = NULL, bool checkTsBufferP = false);
   void SkipData(int countP);
 
@@ -74,6 +85,7 @@ protected:
 public:
   virtual int OpenFilter(u_short pidP, u_char tidP, u_char maskP);
   virtual void CloseFilter(int handleP);
+  virtual bool HasInternalCam(void);
 };
 
 #endif // __VTSATIP_DEVICE_H

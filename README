@@ -45,6 +45,9 @@ Aufruf / Umstellung von vtuner-ng
   -d NUM           Anzahl der VDR-Geräte = gleichzeitige Streams (Standard 1)
   -D LISTE         DVBS,DVBS2,DVBT,DVBT2,DVBC (Standard: alle)
   -f LISTE         feste Server-Frontends je Gerät (0 = Server entscheidet)
+  -c CAIDS         CI-Erweiterung: CA-IDs je CI-Slot des Servers (siehe unten)
+  -i LISTE         CI-Slot (1..4) je VDR-Gerät, 0 = keiner, z. B. -i 1,0
+  -Q               Stream bei Änderung des CI-Zustands NICHT neu starten
   -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
   -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
   -N               Stream bei Leerlauf nicht abbauen
@@ -65,12 +68,38 @@ Wichtige Unterschiede zu vtuner-ng
  * Es gibt kein /dev/dvb/adapterX mehr; Programme außerhalb von VDR können das
    Gerät nicht verwenden.
 
-Nicht enthalten (bewusst, Stand 0.1.0)
---------------------------------------
- * CI/CAM-Erweiterung (x_pmt/x_ci, Octopus-CI, die CA-Emulation des
-   Kernelmoduls). Externe CAM-Plugins über cCamSlot funktionieren wie bei
-   anderen Devices.
- * Server-Erkennung per UPnP, Multicast, RTP-over-TCP, Setup-Menü.
+CI/CAM (ab 0.2.0)
+-----------------
+Unterstützt wird die SAT>IP-Erweiterung "x_pmt/x_ci" (z. B. Digital Devices
+OctopusNet, minisatip mit CA): der Server entschlüsselt mit seinem eigenen
+CI-Slot, VDR bekommt den fertigen Stream.
+
+  vdr -P 'vtsatip -s 192.168.1.20 -d 2 -c "0x1830,0x1843;0x0500" -i 1,2'
+
+  -c  CA-IDs je Slot: Slot 1 kann 0x1830 und 0x1843, Slot 2 kann 0x0500.
+  -i  Gerät 0 nutzt Slot 1, Gerät 1 nutzt Slot 2. Ohne -i gehört Slot n zu
+      Gerät n-1.
+
+Ablauf: Ist ein Kanal verschlüsselt und passt eine CA-ID zum Slot des Geräts,
+sucht das Plugin die PMT-PID des Dienstes in der PAT (die PAT ist immer im
+Stream, VDR-interne Funktionen werden nicht gebraucht), merkt sie sich pro
+Transponder/Dienst und schickt sie als &x_pmt=<pids>&x_ci=<slot> mit. Die
+PMT-PID wird auch in die PID-Liste aufgenommen. Weitere Dienste desselben
+Transponders werden zur x_pmt-Liste hinzugefügt (mehrere Dienste pro CAM, falls
+das CAM das kann). Beim ersten Aufruf eines Kanals ist die PMT-PID noch
+unbekannt: der Stream läuft kurz unverschlüsselt und wird dann automatisch
+einmal mit x_pmt neu gestartet. Danach kommt die PID aus dem Cache.
+
+Der Neustart ist nötig, weil manche Server den CI nur an Streams hängen, die
+mit x_pmt gestartet wurden, und ihn nur beim Abbau der Session freigeben.
+Server, die das nicht brauchen, kann man mit -Q ohne Neustart betreiben.
+Geräte mit CI übernehmen nur Kanäle, deren CA-IDs der Slot kann; VDR
+nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
+
+Nicht enthalten (bewusst)
+-------------------------
+ * "CI TNR"-Erweiterung (herstellerspezifisch, DVBViewer).
+ * Multicast, RTP-over-TCP.
 
 Zum Optimieren
 --------------
