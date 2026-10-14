@@ -12,6 +12,8 @@
 #define __VTSATIP_COMMON_H
 
 #include <stdint.h>
+#include <string>
+#include <vector>
 #include <vdr/device.h>
 #include <vdr/tools.h>
 #include <vdr/config.h>
@@ -33,6 +35,17 @@
 static const int VtSatipStdPids[] = { 0, 16, 17, 18, 19, 20 };
 #define VTSATIP_STDPID_COUNT 6
 
+// mediums a SAT>IP server can deliver
+enum { VTSATIP_MEDIUM_SAT = 0, VTSATIP_MEDIUM_TERR = 1, VTSATIP_MEDIUM_CABLE = 2, VTSATIP_MEDIUM_COUNT = 3 };
+#define VTSATIP_UNLIMITED 99
+
+struct cVtManualServer {
+  std::string host;
+  int port;
+  std::string name;
+  int caps[VTSATIP_MEDIUM_COUNT]; // number of frontends per medium
+};
+
 struct cVtSatipConfig {
   cString host;
   int port;
@@ -45,6 +58,8 @@ struct cVtSatipConfig {
   bool realtime;
   int trace;
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
+  std::vector<cVtManualServer> servers; // all -s entries; host/port above are the first one
+  int discovery;                      // 0 = off, 1 = on, -1 = automatic (on if no -s was given)
   // CI extension (x_pmt / x_ci)
   bool ciExtension;
   bool ciRestart;                    // restart the stream if the "CI state" of a session changes
@@ -54,7 +69,7 @@ struct cVtSatipConfig {
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
     rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true),
-    realtime(true), trace(0), ciExtension(false), ciRestart(true)
+    realtime(true), trace(0), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
         frontend[i] = ciSlot[i] = 0;
@@ -67,6 +82,7 @@ struct cVtSatipConfig {
   cString CaIdsString(void) const;
   bool ParseCiSlots(const char *strP);   // "1,2,0": CI slot per device
   bool SlotProvidesCa(int slotP, const int *caidsP) const; // slotP: 1..N
+  bool UseDiscovery(void) const { return discovery < 0 ? servers.empty() : discovery > 0; }
 };
 
 extern cVtSatipConfig VtSatipConfig;

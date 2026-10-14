@@ -5,7 +5,7 @@
 # The official name of this plugin (used in -P vtsatip)
 PLUGIN = vtsatip
 
-VERSION = 0.2.0
+VERSION = 0.3.0
 
 ### The directory environment:
 
@@ -55,7 +55,7 @@ all-redirect: all
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o device.o param.o pat.o rtsp.o sectionfilter.o tuner.o vtconfig.o
+OBJS = $(PLUGIN).o device.o discover.o param.o pat.o rtsp.o sectionfilter.o servers.o tuner.o vtconfig.o
 
 ### The main target:
 

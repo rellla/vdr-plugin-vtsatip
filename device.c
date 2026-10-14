@@ -4,6 +4,7 @@
 
 #include <vdr/dvbdevice.h>
 #include "param.h"
+#include "servers.h"
 #include "device.h"
 
 static cVtSatipDevice *VtDevicesS[VTSATIP_MAX_DEVICES] = { NULL };
@@ -180,18 +181,35 @@ int cVtSatipDevice::SignalQuality(void) const
   return tunerM ? tunerM->SignalQuality() : -1;
 }
 
+static int MediumOfSource(int sourceP)
+{
+  switch (cSource::ToChar(sourceP)) {
+    case 'S': return VTSATIP_MEDIUM_SAT;
+    case 'T': return VTSATIP_MEDIUM_TERR;
+    case 'C': return VTSATIP_MEDIUM_CABLE;
+    default:  return -1;
+    }
+}
+
+static bool SystemEnabled(int mediumP)
+{
+  switch (mediumP) {
+    case VTSATIP_MEDIUM_SAT:   return (VtSatipConfig.systems & VTSATIP_SYS_SAT) != 0;
+    case VTSATIP_MEDIUM_TERR:  return (VtSatipConfig.systems & VTSATIP_SYS_TERR) != 0;
+    case VTSATIP_MEDIUM_CABLE: return (VtSatipConfig.systems & VTSATIP_SYS_CABLE) != 0;
+    default:                   return false;
+    }
+}
+
 bool cVtSatipDevice::ProvidesSource(int sourceP) const
 {
   cSource *s = Sources.Get(sourceP);
   // source descriptions starting with '0' disable the source for SAT>IP
   if (s && s->Description() && *(s->Description()) == '0')
      return false;
-  switch (cSource::ToChar(sourceP)) {
-    case 'S': return (VtSatipConfig.systems & VTSATIP_SYS_SAT) != 0;
-    case 'T': return (VtSatipConfig.systems & VTSATIP_SYS_TERR) != 0;
-    case 'C': return (VtSatipConfig.systems & VTSATIP_SYS_CABLE) != 0;
-    default:  return false;
-    }
+  int medium = MediumOfSource(sourceP);
+  // the delivery system must be enabled (-D) and a known server must have a frontend for it
+  return medium >= 0 && SystemEnabled(medium) && cVtServers::Get()->Provides(medium);
 }
 
 bool cVtSatipDevice::ProvidesTransponder(const cChannel *channelP) const
@@ -269,11 +287,11 @@ bool cVtSatipDevice::ProvidesEIT(void) const
 int cVtSatipDevice::NumProvidedSystems(void) const
 {
   int n = 0;
-  if (VtSatipConfig.systems & VTSATIP_SYS_SAT)
+  if (SystemEnabled(VTSATIP_MEDIUM_SAT) && cVtServers::Get()->Provides(VTSATIP_MEDIUM_SAT))
      n += 2; // DVB-S, DVB-S2
-  if (VtSatipConfig.systems & VTSATIP_SYS_TERR)
+  if (SystemEnabled(VTSATIP_MEDIUM_TERR) && cVtServers::Get()->Provides(VTSATIP_MEDIUM_TERR))
      n += 2; // DVB-T, DVB-T2
-  if (VtSatipConfig.systems & VTSATIP_SYS_CABLE)
+  if (SystemEnabled(VTSATIP_MEDIUM_CABLE) && cVtServers::Get()->Provides(VTSATIP_MEDIUM_CABLE))
      n += 1; // DVB-C
   return n < 1 ? 1 : (n > 15 ? 15 : n);
 }
@@ -297,6 +315,7 @@ void cVtSatipDevice::SetPowerSaveMode(bool On)
   if (On && VtSatipConfig.disconnectIdle && tunerM) {
      cMutexLock lock(&mutexDevicesS);
      tunerM->Release();
+     cVtServers::Get()->Unassign((int)indexM);
      channelM = cChannel();
      }
 }
@@ -321,6 +340,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
      return false;
   if (!channelP) {
      tunerM->SetChannel(NULL);
+     cVtServers::Get()->Unassign((int)indexM);
      return true;
      }
   cString params = GetTransponderUrlParameters(channelP);
@@ -331,6 +351,14 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   // No waiting for the tuner here: the tuning request is handed to the tuner
   // thread and the lock is detected from the first TS packet. This keeps
   // channel switching as fast as with vtuner-ng.
+  // pick the server with a free frontend for this kind of source (kept while the device stays on it)
+  std::string host, serverName;
+  int port = 0;
+  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName)) {
+     vterror("no SAT>IP server with a free frontend for '%s' [device %u]", channelP->Name(), indexM);
+     return false;
+     }
+  deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, serverName.c_str());
   int ci = 0;
   int pmt = 0;
   if (channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids())) {
@@ -344,7 +372,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   patWantedM = (ci > 0 && pmt == 0); // learn the PMT PID from the PAT
   channelM = *channelP;
   vtdebug("device %u: '%s' ci=%d pmt=%d", indexM, channelP->Name(), ci, pmt);
-  tunerM->SetChannel(*params, ci, pmt);
+  tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
   return true;
 }
 

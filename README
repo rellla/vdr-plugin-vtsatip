@@ -41,7 +41,9 @@ Aufruf / Umstellung von vtuner-ng
   vtuner-ng:   satip -s 192.168.1.20 -D DVBS2 -f 1 (je Gerät ein Daemon)
   vtsatip:     -P "vtsatip -s 192.168.1.20 -d 2 -D DVBS,DVBS2 -f 1,2"
 
-  -s HOST[:PORT]   SAT>IP-Server (Pflicht)
+  -s HOST[:PORT][|CAPS][|NAME]
+                   SAT>IP-Server, darf mehrfach angegeben werden (siehe UPnP)
+  -u MODUS         UPnP-Suche: 0 = aus, 1 = an (Standard: an, wenn kein -s angegeben ist)
   -d NUM           Anzahl der VDR-Geräte = gleichzeitige Streams (Standard 1)
   -D LISTE         DVBS,DVBS2,DVBT,DVBT2,DVBC (Standard: alle)
   -f LISTE         feste Server-Frontends je Gerät (0 = Server entscheidet)
@@ -67,6 +69,35 @@ Wichtige Unterschiede zu vtuner-ng
    Bedeutung (der SAT>IP-Server macht das).
  * Es gibt kein /dev/dvb/adapterX mehr; Programme außerhalb von VDR können das
    Gerät nicht verwenden.
+
+Server-Erkennung per UPnP (ab 0.3.0)
+------------------------------------
+Ohne -s sucht das Plugin SAT>IP-Server selbst (SSDP M-SEARCH auf
+239.255.255.250:1900, alle 60 s wiederholt, dazu NOTIFY alive/byebye). Aus der
+Gerätebeschreibung werden Name, RTSP-Port (Header X-SATIP-RTSP-Port) und
+Fähigkeiten (X_SATIPCAP, z. B. DVBS2-4,DVBT2-2) gelesen. Das Plugin braucht
+dafür weder XML- noch HTTP-Bibliothek.
+
+  vdr -P 'vtsatip -d 4'                           alles automatisch
+  vdr -P 'vtsatip -d 2 -s 192.168.1.20'            fester Server, keine Suche
+  vdr -P 'vtsatip -d 4 -u 1 -s 192.168.1.20|DVBS2-2|Octonet -s 192.168.1.30:8554|DVBT2-4'
+
+CAPS gibt wie bei UPnP die Zahl der Frontends je Empfangsart an. Ohne CAPS
+sind es beliebig viele Frontends für die mit -D erlaubten Systeme (so verhält
+sich ein einzelner -s wie bisher). Manuelle Einträge haben Vorrang vor
+gleichen UPnP-Funden und werden nie durch "byebye" entfernt.
+
+Jedes VDR-Gerät (-d) sucht sich beim Umschalten einen Server mit freiem
+Frontend für die Empfangsart (Sat/Terr/Kabel) und bleibt dabei, solange es
+auf diesem Server benutzt wird. Ist alles belegt, nimmt VDR ein anderes
+Gerät. Bei Leerlauf wird der Server wieder freigegeben. Eine
+Quelle gilt nur als verfügbar, wenn ein bekannter Server das passende System
+liefert. Mit -f (feste Frontends) und mehreren Servern gleichzeitig sollte man
+vorsichtig sein, die Nummer gilt für alle Server.
+
+SVDRP: plug vtsatip SCAN    startet sofort eine neue Suche
+       plug vtsatip INFO    zeigt Server (belegt/frei) und Geräte
+Firewall: UDP 1900 (Multicast) und die RTP-Ports (-p) müssen erreichbar sein.
 
 CI/CAM (ab 0.2.0)
 -----------------
@@ -99,7 +130,7 @@ nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
 Nicht enthalten (bewusst)
 -------------------------
  * "CI TNR"-Erweiterung (herstellerspezifisch, DVBViewer).
- * Multicast, RTP-over-TCP.
+ * Multicast-Streaming, RTP-over-TCP, IPv6.
 
 Zum Optimieren
 --------------

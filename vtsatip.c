@@ -13,6 +13,8 @@
 #include <vdr/plugin.h>
 #include "common.h"
 #include "device.h"
+#include "discover.h"
+#include "servers.h"
 
 #if defined(APIVERSNUM) && APIVERSNUM < 20400
 #error "VDR-2.4.0 API version or greater is required!"
@@ -29,13 +31,14 @@ cVtSatipConfig VtSatipConfig;
 
 class cPluginVtSatip : public cPlugin {
 private:
+  cVtDiscover *discoverM;
   bool ParseServer(const char *paramP);
   bool ParseSystems(const char *paramP);
   void ParseFrontends(const char *paramP);
   void ParsePortRange(const char *paramP);
 public:
-  cPluginVtSatip(void) {}
-  virtual ~cPluginVtSatip() {}
+  cPluginVtSatip(void) : discoverM(NULL) {}
+  virtual ~cPluginVtSatip() { delete discoverM; }
   virtual const char *Version(void) { return VERSION_STR; }
   virtual const char *Description(void) { return tr(DESCRIPTION); }
   virtual const char *CommandLineHelp(void);
@@ -50,8 +53,12 @@ public:
 
 const char *cPluginVtSatip::CommandLineHelp(void)
 {
-  return "  -s HOST[:PORT], --server=HOST[:PORT]\n"
-         "                           address of the SAT>IP server (required, RTSP port default 554)\n"
+  return "  -s HOST[:PORT][|CAPS][|NAME], --server=...\n"
+         "                           address of a SAT>IP server, can be given several times.\n"
+         "                           CAPS = frontends per delivery system as announced by UPnP,\n"
+         "                           e.g. DVBS2-4,DVBT2-2 (default: unlimited for the systems of -D)\n"
+         "                           Without -s all servers are found by UPnP.\n"
+         "  -u MODE,  --upnp=MODE    UPnP discovery: 0 = off, 1 = on (default: on if no -s is given)\n"
          "  -d NUM,   --devices=NUM  number of VDR devices (= simultaneous streams), default 1\n"
          "  -D LIST,  --delsys=LIST  delivery systems the server offers, comma separated:\n"
          "                           DVBS,DVBS2,DVBT,DVBT2,DVBC (default: all)\n"
@@ -73,12 +80,29 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -t MODE,  --trace=MODE   0 = off, 1 = log RTSP traffic and tuning\n";
 }
 
+// HOST[:PORT][|CAPS][|NAME], e.g. 192.168.1.20:554|DVBS2-4,DVBT2-2|OctopusNet
 bool cPluginVtSatip::ParseServer(const char *paramP)
 {
-  cString s(paramP);
-  char *buf = strdup(*s);
+  char *buf = strdup(paramP);
   if (!buf)
      return false;
+  cVtManualServer srv;
+  srv.port = VTSATIP_DEFAULT_RTSP_PORT;
+  for (int i = 0; i < VTSATIP_MEDIUM_COUNT; ++i)
+      srv.caps[i] = 0;
+  char *caps = strchr(buf, '|');
+  if (caps) {
+     *caps++ = 0;
+     char *name = strchr(caps, '|');
+     if (name) {
+        *name++ = 0;
+        srv.name = name;
+        }
+     if (*caps && !cVtServers::ParseCaps(caps, srv.caps)) {
+        free(buf);
+        return false;
+        }
+     }
   char *colon = strrchr(buf, ':');
   if (colon && strchr(buf, ':') == colon) { // exactly one colon: host:port
      *colon = 0;
@@ -87,11 +111,17 @@ bool cPluginVtSatip::ParseServer(const char *paramP)
         free(buf);
         return false;
         }
-     VtSatipConfig.port = port;
+     srv.port = port;
      }
   bool ok = !isempty(buf);
-  if (ok)
-     VtSatipConfig.host = buf;
+  if (ok) {
+     srv.host = buf;
+     if (VtSatipConfig.servers.empty()) { // the first one is also the default server
+        VtSatipConfig.host = buf;
+        VtSatipConfig.port = srv.port;
+        }
+     VtSatipConfig.servers.push_back(srv);
+     }
   free(buf);
   return ok;
 }
@@ -148,6 +178,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
 {
   static const struct option long_options[] = {
     { "server",       required_argument, NULL, 's' },
+    { "upnp",         required_argument, NULL, 'u' },
     { "devices",      required_argument, NULL, 'd' },
     { "delsys",       required_argument, NULL, 'D' },
     { "frontend",     required_argument, NULL, 'f' },
@@ -162,13 +193,16 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:d:D:f:c:i:Qp:r:NRt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:Qp:r:NRt:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
                   fprintf(stderr, "vtsatip: invalid server '%s'\n", optarg);
                   return false;
                   }
+               break;
+          case 'u':
+               VtSatipConfig.discovery = atoi(optarg) ? 1 : 0;
                break;
           case 'd':
                VtSatipConfig.devices = atoi(optarg);
@@ -227,11 +261,25 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
 
 bool cPluginVtSatip::Initialize(void)
 {
-  if (isempty(*VtSatipConfig.host)) {
-     vterror("no SAT>IP server configured, use -s HOST[:PORT]");
+  if (VtSatipConfig.servers.empty() && !VtSatipConfig.UseDiscovery()) {
+     vterror("no SAT>IP server configured, use -s HOST[:PORT] or enable UPnP discovery (-u 1)");
      return false;
      }
-  vtinfo("server %s:%d, %d device(s)", *VtSatipConfig.host, VtSatipConfig.port, VtSatipConfig.devices);
+  // manual servers; without explicit capabilities all enabled delivery systems are offered
+  for (size_t i = 0; i < VtSatipConfig.servers.size(); ++i) {
+      cVtManualServer &s = VtSatipConfig.servers[i];
+      bool any = false;
+      for (int m = 0; m < VTSATIP_MEDIUM_COUNT; ++m)
+          any |= s.caps[m] > 0;
+      if (!any) {
+         s.caps[VTSATIP_MEDIUM_SAT]   = (VtSatipConfig.systems & VTSATIP_SYS_SAT)   ? VTSATIP_UNLIMITED : 0;
+         s.caps[VTSATIP_MEDIUM_TERR]  = (VtSatipConfig.systems & VTSATIP_SYS_TERR)  ? VTSATIP_UNLIMITED : 0;
+         s.caps[VTSATIP_MEDIUM_CABLE] = (VtSatipConfig.systems & VTSATIP_SYS_CABLE) ? VTSATIP_UNLIMITED : 0;
+         }
+      cVtServers::Get()->AddManual(s.host, s.port, s.name, s.caps);
+      vtinfo("server %s:%d configured", s.host.c_str(), s.port);
+      }
+  vtinfo("%d device(s), UPnP discovery %s", VtSatipConfig.devices, VtSatipConfig.UseDiscovery() ? "on" : "off");
   if (VtSatipConfig.ciExtension) {
      bool assigned = false;
      for (int i = 0; i < VtSatipConfig.devices; ++i)
@@ -249,11 +297,17 @@ bool cPluginVtSatip::Initialize(void)
 
 bool cPluginVtSatip::Start(void)
 {
+  if (VtSatipConfig.UseDiscovery() && !discoverM) {
+     discoverM = new cVtDiscover();
+     discoverM->Start();
+     }
   return true;
 }
 
 void cPluginVtSatip::Stop(void)
 {
+  if (discoverM)
+     discoverM->Stop();
   cVtSatipDevice::Shutdown();
 }
 
@@ -261,7 +315,9 @@ const char **cPluginVtSatip::SVDRPHelpPages(void)
 {
   static const char *HelpPages[] = {
     "INFO\n"
-    "    Print state of all vtsatip devices.",
+    "    Print the known SAT>IP servers and the state of all vtsatip devices.",
+    "SCAN\n"
+    "    Search the network for SAT>IP servers now (UPnP).",
     "TRAC [ <mode> ]\n"
     "    Get or set the tracing mode (0 = off, 1 = on).",
     NULL
@@ -272,7 +328,15 @@ const char **cPluginVtSatip::SVDRPHelpPages(void)
 cString cPluginVtSatip::SVDRPCommand(const char *Command, const char *Option, int &ReplyCode)
 {
   if (strcasecmp(Command, "INFO") == 0)
-     return cVtSatipDevice::GetStatus();
+     return cString::sprintf("%s%s", *cVtServers::Get()->Info(), *cVtSatipDevice::GetStatus());
+  if (strcasecmp(Command, "SCAN") == 0) {
+     if (!discoverM) {
+        ReplyCode = 550;
+        return "UPnP discovery is not enabled";
+        }
+     discoverM->Rescan();
+     return "scanning for SAT>IP servers";
+     }
   if (strcasecmp(Command, "TRAC") == 0) {
      if (Option && *Option)
         VtSatipConfig.trace = atoi(Option);

@@ -1,6 +1,11 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-14: Version 0.3.0
+- UPnP/SSDP discovery of SAT>IP servers (M-SEARCH, NOTIFY), description parsing
+  without external libraries, several servers (-s can be repeated, -u),
+  frontend accounting per server and delivery system, SVDRP SCAN.
+
 2026-10-14: Version 0.2.0
 - CI/CAM support through the SAT>IP x_pmt/x_ci extension (-c, -i, -Q),
   PMT PID detection from the PAT, PMT cache, session restart for servers
