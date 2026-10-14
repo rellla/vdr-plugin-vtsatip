@@ -1,0 +1,80 @@
+/*
+ * common.h: vtsatip - SAT>IP plugin for the Video Disk Recorder
+ *
+ * Merges the SAT>IP client logic of "vtuner-ng" (satip daemon + kernel
+ * proxy driver) into an in-process VDR device, so no kernel module is
+ * needed anymore.
+ *
+ * See the README file for copyright information.
+ */
+
+#ifndef __VTSATIP_COMMON_H
+#define __VTSATIP_COMMON_H
+
+#include <stdint.h>
+#include <vdr/device.h>
+#include <vdr/tools.h>
+#include <vdr/config.h>
+#include <vdr/i18n.h>
+
+#define VTSATIP_DEFAULT_RTSP_PORT 554
+#define VTSATIP_MAX_DEVICES       MAXDEVICES
+#define VTSATIP_TSBUFFER_SIZE     KILOBYTE(4096)
+
+// Source types a device may provide (bit mask)
+#define VTSATIP_SYS_SAT   0x01
+#define VTSATIP_SYS_TERR  0x02
+#define VTSATIP_SYS_CABLE 0x04
+
+// PIDs which are always requested from the server, so that PAT, NIT, SDT,
+// EIT, ... are available immediately after tuning (same as vtunerc does).
+static const int VtSatipStdPids[] = { 0, 16, 17, 18, 19, 20 };
+#define VTSATIP_STDPID_COUNT 6
+
+struct cVtSatipConfig {
+  cString host;
+  int port;
+  int devices;
+  int systems;
+  int rcvBufSize;
+  int portStart;
+  int portStop;
+  bool disconnectIdle;
+  bool realtime;
+  int trace;
+  int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
+  cVtSatipConfig(void)
+  : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
+    systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true),
+    realtime(true), trace(0)
+  {
+    for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
+        frontend[i] = 0;
+  }
+};
+
+extern cVtSatipConfig VtSatipConfig;
+
+#define vtinfo(fmt, ...)  isyslog("vtsatip: " fmt, ##__VA_ARGS__)
+#define vterror(fmt, ...) esyslog("vtsatip: " fmt, ##__VA_ARGS__)
+#define vtdebug(fmt, ...) do { if (VtSatipConfig.trace) dsyslog("vtsatip: " fmt, ##__VA_ARGS__); } while (0)
+
+inline uint16_t VtTsPid(const uint8_t *p)
+{
+  return (uint16_t)(((p[1] & 0x1f) << 8) + p[2]);
+}
+
+inline uint8_t VtTsPayload(const uint8_t *p)
+{
+  if (!(p[3] & 0x10))
+     return 0;
+  if (p[3] & 0x20) {
+     if (p[4] > 183)
+        return 0;
+     return (uint8_t)((184 - 1) - p[4]);
+     }
+  return 184;
+}
+
+#endif // __VTSATIP_COMMON_H

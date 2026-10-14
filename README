@@ -1,0 +1,87 @@
+vtsatip - SAT>IP-Plugin für VDR mit dem Verhalten von vtuner-ng
+================================================================
+
+Was ist das?
+------------
+Ein VDR-Plugin, das den SAT>IP-Client aus vtuner-ng (Daemon "satip") direkt in
+VDR einbaut. Das Kernelmodul vtunerc und der Userspace-Daemon entfallen, nach
+einem Kernelupdate muss nichts mehr neu kompiliert werden.
+
+Das Plugin wurde bewusst NICHT als Abwandlung des Plugins von FireFlyVDR
+gebaut, sondern nach dem Ablauf von vtuner-ng (die Aufteilung in Geräte,
+Tuner, Section-Filter usw. und die Parameter-Abbildung channels.conf ->
+SAT>IP-URL stammen aus dem satip-Plugin, GPLv2):
+
+ * Eine dauerhafte RTSP-Session pro Gerät. Nur das erste Tuning macht
+   OPTIONS + SETUP (pids=none) + PLAY. Jeder weitere Kanalwechsel auf einen
+   anderen Transponder ist genau ein PLAY mit Tuningparametern und kompletter
+   PID-Liste.
+ * Gleicher Transponder: kein RTSP-Verkehr, der Lock bleibt erhalten.
+ * PID-Änderungen gehen sofort als addpids/delpids raus (kein 250-ms-Timer).
+ * PIDs 0,16,17,18,19,20 (PAT, NIT, SDT, EIT, ...) werden immer angefordert.
+ * "Lock" gilt, sobald das erste echte TS-Paket eintrifft (wie im Kernelmodul),
+   es wird nicht auf RTCP/DESCRIBE gewartet.
+ * SetChannelDevice() kehrt sofort zurück, es wird nicht auf den Tuner gewartet.
+ * Pakete, die während eines Retunes noch vom alten Transponder eintreffen,
+   werden verworfen; beim Retune werden die Puffer geleert.
+ * RTP-Empfang in eigenem Thread, der Socket wird komplett leergelesen,
+   Versuch auf SCHED_FIFO (niedrigste Echtzeitpriorität) wie im vtuner-Daemon.
+ * Session-Keepalive per OPTIONS, nach Fehlern baut sich der Tuner selbst neu auf.
+
+Installation
+------------
+  cd VDR-Quellverzeichnis/PLUGINS/src
+  tar xzf vdr-vtsatip-0.1.0.tgz ; ln -s vtsatip-0.1.0 vtsatip
+  cd ../.. && make plugins && make install-plugins     (bzw. make install-lib im Plugin)
+
+Es werden nur VDR >= 2.4 und libpthread benötigt (kein curl, kein XML).
+
+Aufruf / Umstellung von vtuner-ng
+---------------------------------
+  vtuner-ng:   satip -s 192.168.1.20 -D DVBS2 -f 1 (je Gerät ein Daemon)
+  vtsatip:     -P "vtsatip -s 192.168.1.20 -d 2 -D DVBS,DVBS2 -f 1,2"
+
+  -s HOST[:PORT]   SAT>IP-Server (Pflicht)
+  -d NUM           Anzahl der VDR-Geräte = gleichzeitige Streams (Standard 1)
+  -D LISTE         DVBS,DVBS2,DVBT,DVBT2,DVBC (Standard: alle)
+  -f LISTE         feste Server-Frontends je Gerät (0 = Server entscheidet)
+  -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
+  -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
+  -N               Stream bei Leerlauf nicht abbauen
+  -R               keine Echtzeitpriorität versuchen
+  -t 1             Tracing: RTSP-Verkehr und Tuning im Syslog
+
+Wichtige Unterschiede zu vtuner-ng
+----------------------------------
+ * Die Satellitenposition (src=) kommt NICHT mehr aus der DiSEqC-Nachricht,
+   die VDR an das virtuelle Frontend schickte. Sie wird wie im satip-Plugin aus
+   der Beschreibung der Quelle in sources.conf gelesen (führende Zahl):
+        S19.2E  1 Astra 19.2E        -> src=1
+        S13.0E  2 Hotbird            -> src=2
+   Ohne Zahl wird src=1 verwendet. Eine Quelle, deren Beschreibung mit "0"
+   beginnt, wird von diesem Plugin nicht bedient.
+ * Die diseqc.conf/LNB-Einstellungen von VDR sind für diese Geräte ohne
+   Bedeutung (der SAT>IP-Server macht das).
+ * Es gibt kein /dev/dvb/adapterX mehr; Programme außerhalb von VDR können das
+   Gerät nicht verwenden.
+
+Nicht enthalten (bewusst, Stand 0.1.0)
+--------------------------------------
+ * CI/CAM-Erweiterung (x_pmt/x_ci, Octopus-CI, die CA-Emulation des
+   Kernelmoduls). Externe CAM-Plugins über cCamSlot funktionieren wie bei
+   anderen Devices.
+ * Server-Erkennung per UPnP, Multicast, RTP-over-TCP, Setup-Menü.
+
+Zum Optimieren
+--------------
+ * Echtzeitpriorität: VDR muss SCHED_FIFO setzen dürfen, z. B. systemd:
+       LimitRTPRIO=10   (und ggf. AmbientCapabilities=CAP_SYS_NICE)
+ * Bei Paketverlusten net.core.rmem_max erhöhen, z. B. 4194304, und -r setzen.
+
+SVDRP
+-----
+  plug vtsatip INFO       Zustand aller Geräte
+  plug vtsatip TRAC 1     Tracing ein/aus
+
+Lizenz: GPLv2 (siehe COPYING). Enthält Code aus dem satip-Plugin und der
+Idee/dem Ablauf des vtuner-ng-Daemons.
