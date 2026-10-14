@@ -12,6 +12,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <map>
+#include <vector>
+#include <utility>
 #include "tuner.h"
 
 // --- cVtReceiver ------------------------------------------------------------
@@ -315,12 +318,61 @@ void cVtTuner::DoRelease(void)
   sinkM.OnRetune();
 }
 
+// Bring the query into the form vtuner-ng sends (order of the keys, fec and
+// plts always present for DVB-S/S2), because some servers are picky.
+static std::string NormalizeParams(const std::string &inP)
+{
+  std::vector<std::pair<std::string, std::string> > kv;
+  size_t pos = 0;
+  while (pos <= inP.size()) {
+        size_t amp = inP.find('&', pos);
+        std::string item = inP.substr(pos, amp == std::string::npos ? std::string::npos : amp - pos);
+        if (!item.empty()) {
+           size_t eq = item.find('=');
+           if (eq == std::string::npos)
+              kv.push_back(std::make_pair(item, std::string()));
+           else
+              kv.push_back(std::make_pair(item.substr(0, eq), item.substr(eq + 1)));
+           }
+        if (amp == std::string::npos)
+           break;
+        pos = amp + 1;
+        }
+  std::map<std::string, std::string> m;
+  for (size_t i = 0; i < kv.size(); ++i)
+      m[kv[i].first] = kv[i].second;
+  bool sat = m.count("msys") && (m["msys"] == "dvbs" || m["msys"] == "dvbs2");
+  if (sat) {
+     if (!m.count("fec"))
+        m["fec"] = "auto";
+     if (m["msys"] == "dvbs2" && !m.count("plts"))
+        m["plts"] = "on";
+     }
+  static const char *order[] = { "src", "fe", "freq", "pol", "msys", "mtype", "sr", "fec", "ro", "plts", NULL };
+  std::string out;
+  for (int i = 0; order[i]; ++i) {
+      if (m.count(order[i])) {
+         out += (out.empty() ? "" : "&") + std::string(order[i]) + "=" + m[order[i]];
+         m.erase(order[i]);
+         }
+      }
+  for (size_t i = 0; i < kv.size(); ++i) { // everything else in its original order
+      std::map<std::string, std::string>::iterator it = m.find(kv[i].first);
+      if (it != m.end()) {
+         out += (out.empty() ? "" : "&") + it->first + (it->second.empty() ? "" : "=" + it->second);
+         m.erase(it);
+         }
+      }
+  return out;
+}
+
 bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP)
 {
   std::string params = paramsP;
   int fe = VtSatipConfig.frontend[indexM];
   if (fe > 0 && params.find("fe=") == std::string::npos)
-     params = "fe=" + std::to_string(fe) + "&" + params;
+     params += "&fe=" + std::to_string(fe);
+  params = NormalizeParams(params);
 
   // same transponder, session is running -> nothing to do, keep the lock
   if (rtspM.HasSession() && params == activeParamsM) {

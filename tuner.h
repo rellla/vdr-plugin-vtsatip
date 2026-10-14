@@ -55,7 +55,7 @@ class cVtTuner : public cThread {
   friend class cVtReceiver;
 private:
   enum {
-    eRetryDelayMs     = 1500,
+    eRetryDelayMs     = 5000,
     eIdlePollMs       = 1000,
     eMinKeepAliveSec  = 5
   };

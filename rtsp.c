@@ -15,6 +15,12 @@
 #include <arpa/inet.h>
 #include "rtsp.h"
 
+// "host" or "host:port" - the default port is left out, like vtuner-ng does
+static cString HostPart(const char *hostP, int portP)
+{
+  return portP == VTSATIP_DEFAULT_RTSP_PORT ? cString(hostP) : cString::sprintf("%s:%d", hostP, portP);
+}
+
 cVtRtsp::cVtRtsp(void)
 : fdM(-1),
   hostM(""),
@@ -198,7 +204,12 @@ bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
   if (statusP)
      *statusP = status;
   if (status != 200) {
-     vterror("RTSP: server answered with status %d", status);
+     char line[300];
+     size_t n = strcspn(requestP, "\r\n");
+     if (n >= sizeof(line)) n = sizeof(line) - 1;
+     memcpy(line, requestP, n);
+     line[n] = 0;
+     vterror("RTSP: server answered with status %d to: %s", status, line);
      return false;
      }
   return true;
@@ -207,8 +218,8 @@ bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
 bool cVtRtsp::Options(void)
 {
   char req[512];
-  snprintf(req, sizeof(req), "OPTIONS rtsp://%s:%d/ RTSP/1.0\r\nCSeq: %d\r\n%s%s%s\r\n",
-           *hostM, portM, cseqM++,
+  snprintf(req, sizeof(req), "OPTIONS rtsp://%s/ RTSP/1.0\r\nCSeq: %d\r\n%s%s%s\r\n",
+           *HostPart(*hostM, portM), cseqM++,
            sessionM[0] ? "Session: " : "", sessionM, sessionM[0] ? "\r\n" : "");
   return Transact(req, 3000);
 }
@@ -216,9 +227,9 @@ bool cVtRtsp::Options(void)
 bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP)
 {
   char req[1536];
-  int n = snprintf(req, sizeof(req), "SETUP rtsp://%s:%d/?%s RTSP/1.0\r\nCSeq: %d\r\n"
+  int n = snprintf(req, sizeof(req), "SETUP rtsp://%s/?%s RTSP/1.0\r\nCSeq: %d\r\n"
                    "Transport: RTP/AVP;unicast;client_port=%d-%d\r\n\r\n",
-                   *hostM, portM, queryP, cseqM++, rtpPortP, rtcpPortP);
+                   *HostPart(*hostM, portM), queryP, cseqM++, rtpPortP, rtcpPortP);
   if (n <= 0 || n >= (int)sizeof(req))
      return false;
   if (!Transact(req, 5000))
@@ -258,8 +269,8 @@ bool cVtRtsp::Play(const char *queryP)
   if (streamIdM < 0)
      return false;
   char req[1536];
-  int n = snprintf(req, sizeof(req), "PLAY rtsp://%s:%d/stream=%d%s%s RTSP/1.0\r\nCSeq: %d\r\nSession: %s\r\n\r\n",
-                   *hostM, portM, streamIdM, (queryP && *queryP) ? "?" : "", queryP ? queryP : "",
+  int n = snprintf(req, sizeof(req), "PLAY rtsp://%s/stream=%d%s%s RTSP/1.0\r\nCSeq: %d\r\nSession: %s\r\n\r\n",
+                   *HostPart(*hostM, portM), streamIdM, (queryP && *queryP) ? "?" : "", queryP ? queryP : "",
                    cseqM++, sessionM);
   if (n <= 0 || n >= (int)sizeof(req))
      return false;
@@ -271,8 +282,8 @@ bool cVtRtsp::Teardown(void)
   if (streamIdM < 0 || fdM < 0)
      return true;
   char req[512];
-  snprintf(req, sizeof(req), "TEARDOWN rtsp://%s:%d/stream=%d RTSP/1.0\r\nCSeq: %d\r\nSession: %s\r\n\r\n",
-           *hostM, portM, streamIdM, cseqM++, sessionM);
+  snprintf(req, sizeof(req), "TEARDOWN rtsp://%s/stream=%d RTSP/1.0\r\nCSeq: %d\r\nSession: %s\r\n\r\n",
+           *HostPart(*hostM, portM), streamIdM, cseqM++, sessionM);
   bool r = Transact(req, 2000);
   streamIdM = -1;
   sessionM[0] = 0;
