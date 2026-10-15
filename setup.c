@@ -18,6 +18,8 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
 {
   for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
       ciSlotM[i] = VtSatipConfig.ciSlot[i];
+  for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
+      frontendM[i] = VtSatipConfig.frontend[i];
   cString ids = VtSatipConfig.CaIdsString();
   strn0cpy(caIdsM, *ids, sizeof(caIdsM));
   cString sids = VtSatipConfig.SidsString();
@@ -39,6 +41,8 @@ void cMenuSetupVtSatip::Setup(void)
   Clear();
   Add(new cMenuEditStraItem(tr("UPnP discovery"), &discoveryM, 3, discoveryTextsM));
   Add(new cMenuEditStraItem(tr("Transport mode"), &transportM, 3, transportTextsM));
+  for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i)
+      Add(new cMenuEditIntItem(*cString::sprintf(tr("VDR device %d: server frontend"), i + 1), &frontendM[i], 0, VTSATIP_MAX_FRONTENDS, tr("auto")));
   Add(new cMenuEditBoolItem(tr("Enable EPG scanning"), &eitScanM));
   Add(new cMenuEditBoolItem(tr("Disconnect idle streams"), &disconnectIdleM));
   Add(new cMenuEditBoolItem(tr("Enable CI extension"), &ciExtensionM));
@@ -111,6 +115,8 @@ void cMenuSetupVtSatip::Store(void)
   for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i) {
       VtSatipConfig.ciSlot[i] = ciSlotM[i];
       SetupStore(*cString::sprintf("CISlotDevice%d", i), ciSlotM[i]);
+      VtSatipConfig.frontend[i] = frontendM[i];
+      SetupStore(*cString::sprintf("FrontendDevice%d", i), frontendM[i]);
       }
   VtSatipSetupChanged();
 }

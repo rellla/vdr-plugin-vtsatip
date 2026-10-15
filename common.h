@@ -40,6 +40,9 @@ enum { VTSATIP_MEDIUM_SAT = 0, VTSATIP_MEDIUM_TERR = 1, VTSATIP_MEDIUM_CABLE = 2
 #define VTSATIP_UNLIMITED 99
 
 // how the stream is delivered
+// highest server frontend number which can be selected (fe=)
+#define VTSATIP_MAX_FRONTENDS 16
+
 enum { VTSATIP_TRANSPORT_UNICAST = 0, VTSATIP_TRANSPORT_MULTICAST = 1, VTSATIP_TRANSPORT_TCP = 2 };
 
 struct cVtManualServer {

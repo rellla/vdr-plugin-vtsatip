@@ -23,6 +23,7 @@ private:
   int transportM;       // VTSATIP_TRANSPORT_*
   const char *transportTextsM[3];
   int ciSlotM[VTSATIP_MAX_DEVICES];
+  int frontendM[VTSATIP_MAX_DEVICES];
   char caIdsM[128];
   char sidsM[128];
   const char *discoveryTextsM[3];

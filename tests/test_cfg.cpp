@@ -24,6 +24,7 @@ int main(){
   CHECK(c.ParseCiSlots("1,0,2") && c.ciSlot[0]==1 && c.ciSlot[1]==0 && c.ciSlot[2]==2, "CI slot assignment");
   CHECK(!c.ParseCiSlots("9"), "invalid CI slot rejected");
   cVtSatipConfig s;
+  CHECK(s.SetupParse("FrontendDevice1", "3") && s.frontend[1] == 3 && !s.SetupParse("FrontendDevice1", "99") && s.frontend[1] == 3, "setup: frontend per device");
   CHECK(s.SetupParse("EnableCIExtension", "1") && s.ciExtension, "setup: CI extension");
   CHECK(s.SetupParse("CAIDs", "0x1830;0x500") && s.caids[1][0] == 0x500, "setup: CA IDs");
   CHECK(!s.SetupParse("CAIDs", "bogus") && s.caids[1][0] == 0x500, "setup: invalid CA IDs rejected");

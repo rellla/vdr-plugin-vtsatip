@@ -182,6 +182,12 @@ bool cVtSatipConfig::SetupParse(const char *nameP, const char *valueP)
         return false;
      ciSlot[device] = v;
      }
+  else if (!strncasecmp(nameP, "FrontendDevice", 14)) {
+     int device = atoi(nameP + 14);
+     if (device < 0 || device >= VTSATIP_MAX_DEVICES || v < 0 || v > VTSATIP_MAX_FRONTENDS)
+        return false;
+     frontend[device] = v;
+     }
   else if (!strcasecmp(nameP, "Discovery"))
      discovery = (v < 0) ? -1 : (v ? 1 : 0);
   else if (!strcasecmp(nameP, "EnableEITScan"))
