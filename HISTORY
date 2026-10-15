@@ -1,6 +1,17 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-15: Version 0.5.0
+- Self-healing server compatibility: session IDs with leading zeros,
+  servers without addpids/delpids, refused retune on a running session
+  (new session), HTTP-like 503 -> the device moves to another server.
+- Multicast transport (-T multicast / setup menu) with automatic unicast
+  fallback per server.
+- Satellite position filter per server (-s HOST|DVBS2-4:S19.2E,S13E).
+- CI extension only on servers that have a CI (UPnP model detection, CI/NOCI).
+- SVDRP ATTA/DETA, option -A (start detached).
+- Service ID restriction per CI slot (-S).
+
 2026-10-14: Version 0.4.0
 - Setup menu (UPnP discovery mode, EPG scan, idle disconnect, CI slots and
   CA IDs, tracing, server list, red key = scan), settings kept in setup.conf
