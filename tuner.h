@@ -134,6 +134,7 @@ private:
   std::atomic<int> levelM;      // raw 0..255
   std::atomic<int> frontendM;
   std::atomic<bool> sessionUpM;
+  std::atomic<int> transportModeM;   // VTSATIP_TRANSPORT_* of the running session
   std::atomic<unsigned long> bytesM;
 
   std::set<int> WantedPids(void);     // with standard PIDs, mutexM must be held
@@ -167,6 +168,8 @@ public:
   unsigned long Packets(void) const { return receiverM.Packets(); }
   unsigned long PacketsLost(void) const { return receiverM.Lost(); }
   unsigned long PacketsReordered(void) const { return receiverM.Reordered(); }
+  int TransportMode(void) const { return transportModeM.load(); }
+  unsigned long Bytes(void) const { return bytesM.load(); }
   int FrontendId(void) const { return frontendM.load(); }
   cString GetInformation(void);
 };

@@ -79,3 +79,36 @@ msgstr "Ungültige Service-ID-Liste"
 
 msgid "TCP"
 msgstr "TCP"
+
+msgid "vtsatip statistics"
+msgstr "vtsatip-Statistik"
+
+msgid "Statistics..."
+msgstr "Statistik..."
+
+msgid "detached"
+msgstr "abgekoppelt"
+
+msgid "idle"
+msgstr "inaktiv"
+
+msgid "locked"
+msgstr "Lock"
+
+msgid "no lock"
+msgstr "kein Lock"
+
+msgid "Device %d: %s (%s)"
+msgstr "Gerät %d: %s (%s)"
+
+msgid "  Channel: %s"
+msgstr "  Kanal: %s"
+
+msgid "  Frontend %d, signal %d%%, quality %d%%, %s"
+msgstr "  Frontend %d, Signal %d%%, Qualität %d%%, %s"
+
+msgid "  %.1f Mbit/s, total %.1f MB"
+msgstr "  %.1f Mbit/s, gesamt %.1f MB"
+
+msgid "  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"
+msgstr "  RTP-Pakete %lu, verloren %lu (%.2f%%), umsortiert %lu"

@@ -76,6 +76,32 @@ cVtSatipDevice *cVtSatipDevice::GetDevice(unsigned int indexP)
   return (indexP < VTSATIP_MAX_DEVICES) ? VtDevicesS[indexP] : NULL;
 }
 
+bool cVtSatipDevice::GetStats(unsigned indexP, cVtDeviceStats &statsP)
+{
+  cMutexLock lock(&mutexDevicesS);
+  cVtSatipDevice *d = GetDevice(indexP);
+  if (!d || !d->tunerM)
+     return false;
+  statsP = cVtDeviceStats();
+  statsP.index = indexP;
+  statsP.detached = d->detachedM;
+  statsP.session = d->tunerM->IsTuned();
+  statsP.lock = d->tunerM->HasLock();
+  statsP.frontend = d->tunerM->FrontendId();
+  statsP.strength = d->tunerM->SignalStrength();
+  statsP.quality = d->tunerM->SignalQuality();
+  statsP.transport = d->tunerM->TransportMode();
+  statsP.bytes = d->tunerM->Bytes();
+  statsP.packets = d->tunerM->Packets();
+  statsP.lost = d->tunerM->PacketsLost();
+  statsP.reordered = d->tunerM->PacketsReordered();
+  cMutexLock statLock(&d->statMutexM);
+  statsP.server = d->serverNameM;
+  if (!(d->channelM.GetChannelID() == tChannelID::InvalidID))
+     statsP.channel = d->channelM.Name();
+  return true;
+}
+
 cString cVtSatipDevice::GetInformation(void)
 {
   return cString::sprintf("vtSAT>IP device %u (CardIndex %d)%s\n  tuner: %s\n  overflows: %lu\n  section filters: %d\n  last channel: %s\n",
@@ -152,6 +178,7 @@ void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
   if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name, 15000, *source, ci > 0)) {
      vtinfo("server %s:%d has no free frontend, device %u moves to %s:%d", hostP.c_str(), portP, indexM, host.c_str(), port);
      deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str());
+     SetServerName(name);
      tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
      }
 }
@@ -419,6 +446,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   if (!channelP) {
      tunerM->SetChannel(NULL);
      cVtServers::Get()->Unassign((int)indexM);
+     SetServerName("");
      return true;
      }
   cString params = GetTransponderUrlParameters(channelP);
@@ -437,6 +465,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
      return false;
      }
   deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, serverName.c_str());
+  SetServerName(serverName);
   int ci = 0;
   int pmt = 0;
   if (channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids(), channelP->Sid())) {

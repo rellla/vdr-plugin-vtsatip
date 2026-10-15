@@ -350,6 +350,7 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   levelM(0),
   frontendM(-1),
   sessionUpM(false),
+  transportModeM(VTSATIP_TRANSPORT_UNICAST),
   bytesM(0)
 {
   if (receiverM.Open()) {
@@ -619,6 +620,7 @@ bool cVtTuner::OpenSession(const std::string &hostP, int portP, const std::strin
             }
          }
       if (ok) {
+         transportModeM = tcpActiveM ? VTSATIP_TRANSPORT_TCP : (multicastActiveM ? VTSATIP_TRANSPORT_MULTICAST : VTSATIP_TRANSPORT_UNICAST);
          sessionUpM = true;
          sessionHadPmtM = !pmtP.empty();
          return true;

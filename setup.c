@@ -3,8 +3,69 @@
  */
 
 #include <vdr/menu.h>
+#include "device.h"
 #include "servers.h"
 #include "setup.h"
+
+// --- cMenuVtSatipStats ------------------------------------------------------
+
+cMenuVtSatipStats::cMenuVtSatipStats(void)
+: cOsdMenu(tr("vtsatip statistics")),
+  refreshM(1000),
+  lastTimeM(0)
+{
+  for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
+      lastBytesM[i] = 0;
+  SetMenuCategory(mcText);
+  Fill();
+  SetHelp(NULL, NULL, NULL, NULL);
+}
+
+void cMenuVtSatipStats::Fill(void)
+{
+  Clear();
+  uint64_t now = cTimeMs::Now();
+  double secs = lastTimeM ? (now - lastTimeM) / 1000.0 : 0;
+  lastTimeM = now;
+  for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i) {
+      cVtDeviceStats st;
+      if (!cVtSatipDevice::GetStats(i, st))
+         continue;
+      const char *state = st.detached ? tr("detached") : !st.session ? tr("idle") : st.lock ? tr("locked") : tr("no lock");
+      Add(new cOsdItem(*cString::sprintf(tr("Device %d: %s (%s)"), i + 1, st.server.empty() ? "-" : st.server.c_str(), state), osUnknown, false));
+      if (st.session) {
+         if (!st.channel.empty())
+            Add(new cOsdItem(*cString::sprintf(tr("  Channel: %s"), st.channel.c_str()), osUnknown, false));
+         static const char *const transports[] = { "UDP", "multicast", "TCP" };
+         Add(new cOsdItem(*cString::sprintf(tr("  Frontend %d, signal %d%%, quality %d%%, %s"), st.frontend, st.strength < 0 ? 0 : st.strength,
+                                            st.quality < 0 ? 0 : st.quality, transports[st.transport % 3]), osUnknown, false));
+         double mbit = (secs > 0 && st.bytes >= lastBytesM[i]) ? (st.bytes - lastBytesM[i]) * 8.0 / 1e6 / secs : 0;
+         Add(new cOsdItem(*cString::sprintf(tr("  %.1f Mbit/s, total %.1f MB"), mbit, st.bytes / 1e6), osUnknown, false));
+         double pct = (st.packets + st.lost) ? 100.0 * st.lost / (st.packets + st.lost) : 0;
+         Add(new cOsdItem(*cString::sprintf(tr("  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"), st.packets, st.lost, pct, st.reordered), osUnknown, false));
+         }
+      lastBytesM[i] = st.bytes;
+      }
+  Add(new cOsdItem(tr("Known SAT>IP servers:"), osUnknown, false));
+  std::vector<std::string> lines = cVtServers::Get()->InfoLines();
+  for (size_t i = 0; i < lines.size(); ++i)
+      Add(new cOsdItem(lines[i].c_str(), osUnknown, false));
+  Display();
+}
+
+eOSState cMenuVtSatipStats::ProcessKey(eKeys keyP)
+{
+  eOSState state = cOsdMenu::ProcessKey(keyP);
+  if (state == osUnknown)
+     state = osContinue;
+  if (keyP == kNone && refreshM.TimedOut()) {
+     Fill();
+     refreshM.Set(1000);
+     }
+  return state;
+}
+
+// --- cMenuSetupVtSatip -------------------------------------------------------
 
 cMenuSetupVtSatip::cMenuSetupVtSatip(void)
 : ciExtensionM(VtSatipConfig.ciExtension),
@@ -56,6 +117,7 @@ void cMenuSetupVtSatip::Setup(void)
      Add(new cMenuEditBoolItem(tr("  Restart stream on CI change"), &ciRestartM));
      }
   Add(new cMenuEditBoolItem(tr("Tracing"), &traceM));
+  Add(new cOsdItem(tr("Statistics..."), osUser1));
   Add(new cOsdItem(tr("Known SAT>IP servers:"), osUnknown, false));
   std::vector<std::string> lines = cVtServers::Get()->InfoLines();
   serverLinesM = lines.size();
@@ -69,6 +131,8 @@ eOSState cMenuSetupVtSatip::ProcessKey(eKeys keyP)
 {
   int oldCi = ciExtensionM;
   eOSState state = cMenuSetupPage::ProcessKey(keyP);
+  if (state == osUser1)
+     return AddSubMenu(new cMenuVtSatipStats);
   if (state == osUnknown) {
      if (keyP == kRed) {
         VtSatipRescan();

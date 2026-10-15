@@ -3,7 +3,7 @@
 #include "device.h"
 #include "i18n.h"
 enum eKeys { kNone, kOk, kBack, kRed, kGreen, kYellow, kBlue, kInfo };
-enum eOSState { osUnknown, osContinue, osBack, osEnd };
+enum eOSState { osUnknown, osContinue, osBack, osEnd, osUser1 };
 enum eMenuCategory { mcUndefined, mcSetupPlugins, mcText };
 enum eMessageType { mtInfo, mtWarning, mtError };
 struct cSkins { void Message(eMessageType, const char *) {} };
@@ -12,6 +12,8 @@ inline char *strn0cpy(char *dest, const char *src, size_t n) { strncpy(dest, src
 class cOsdItem { public: cOsdItem(const char *, eOSState = osUnknown, bool = true) {} virtual ~cOsdItem() {} };
 class cOsdMenu {
 public:
+  cOsdMenu(const char * = NULL, int = 0, int = 0, int = 0, int = 0, int = 0) {}
+  eOSState AddSubMenu(cOsdMenu *m) { delete m; return osContinue; }
   void Clear() {} void Add(cOsdItem *) {} cOsdItem *Get(int) { return NULL; } int Current() { return 0; } void SetCurrent(cOsdItem *) {}
   virtual void Display() {} void SetHelp(const char *, const char *, const char *, const char *) {} void SetMenuCategory(eMenuCategory) {}
   virtual eOSState ProcessKey(eKeys) { return osUnknown; } virtual ~cOsdMenu() {}

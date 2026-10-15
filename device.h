@@ -12,8 +12,29 @@
 #include "sectionfilter.h"
 #include "pat.h"
 
+// a snapshot of what a device is doing, for the statistics page
+struct cVtDeviceStats {
+  unsigned index;
+  bool detached;
+  bool session;          // RTSP session is up
+  bool lock;
+  int frontend;          // server frontend, -1 unknown
+  int strength;          // 0..100, -1 unknown
+  int quality;
+  int transport;         // VTSATIP_TRANSPORT_*
+  unsigned long bytes;
+  unsigned long packets;
+  unsigned long lost;
+  unsigned long reordered;
+  std::string server;
+  std::string channel;
+  cVtDeviceStats(void) : index(0), detached(false), session(false), lock(false), frontend(-1), strength(-1), quality(-1),
+                         transport(0), bytes(0), packets(0), lost(0), reordered(0) {}
+};
+
 class cVtSatipDevice : public cDevice, public cVtTunerSink {
 public:
+  static bool GetStats(unsigned indexP, cVtDeviceStats &statsP); // false: no such device
   static bool Initialize(unsigned int deviceCountP);
   static void Shutdown(void);
   static cString GetStatus(void);
@@ -26,8 +47,11 @@ private:
   unsigned int indexM;
   static cMutex mutexDevicesS;
   cString deviceNameM;
+  cMutex statMutexM;
+  std::string serverNameM;      // for the statistics
   std::atomic<bool> detachedM;
   bool Detach(void);
+  void SetServerName(const std::string &nameP) { cMutexLock lock(&statMutexM); serverNameM = nameP; }
   cChannel channelM;
   bool isOpenDvrM;
   int bytesDeliveredM;

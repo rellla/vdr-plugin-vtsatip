@@ -12,6 +12,18 @@
 void VtSatipRescan(void);          // search for servers now
 void VtSatipSetupChanged(void);    // apply changed settings (e.g. start/stop the discovery)
 
+// read-only page with the essential data of "SVDRP INFO"
+class cMenuVtSatipStats : public cOsdMenu {
+private:
+  cTimeMs refreshM;
+  unsigned long lastBytesM[VTSATIP_MAX_DEVICES];
+  uint64_t lastTimeM;
+  void Fill(void);
+public:
+  cMenuVtSatipStats(void);
+  virtual eOSState ProcessKey(eKeys keyP);
+};
+
 class cMenuSetupVtSatip : public cMenuSetupPage {
 private:
   int ciExtensionM;
