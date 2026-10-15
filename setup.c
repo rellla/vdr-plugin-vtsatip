@@ -12,6 +12,7 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
   discoveryM(VtSatipConfig.discovery + 1),
   eitScanM(VtSatipConfig.eitScan),
   disconnectIdleM(VtSatipConfig.disconnectIdle),
+  allPidsM(VtSatipConfig.allPids),
   traceM(VtSatipConfig.trace ? 1 : 0),
   transportM(VtSatipConfig.transport),
   serverLinesM(0)
@@ -45,6 +46,7 @@ void cMenuSetupVtSatip::Setup(void)
       Add(new cMenuEditIntItem(*cString::sprintf(tr("VDR device %d: server frontend"), i + 1), &frontendM[i], 0, VTSATIP_MAX_FRONTENDS, tr("auto")));
   Add(new cMenuEditBoolItem(tr("Enable EPG scanning"), &eitScanM));
   Add(new cMenuEditBoolItem(tr("Disconnect idle streams"), &disconnectIdleM));
+  Add(new cMenuEditBoolItem(tr("Request all PIDs (pids=all)"), &allPidsM));
   Add(new cMenuEditBoolItem(tr("Enable CI extension"), &ciExtensionM));
   if (ciExtensionM) {
      for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i)
@@ -111,6 +113,8 @@ void cMenuSetupVtSatip::Store(void)
   SetupStore("Discovery", VtSatipConfig.discovery);
   SetupStore("EnableEITScan", eitScanM);
   SetupStore("DisconnectIdle", disconnectIdleM);
+  VtSatipConfig.allPids = allPidsM != 0;
+  SetupStore("AllPids", allPidsM);
   SetupStore("Trace", traceM);
   for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i) {
       VtSatipConfig.ciSlot[i] = ciSlotM[i];

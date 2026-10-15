@@ -63,6 +63,7 @@ struct cVtSatipConfig {
   int portStart;
   int portStop;
   bool disconnectIdle;
+  bool allPids;                      // request the whole transponder (pids=all) instead of a PID list
   bool eitScan;                      // let VDR use the devices for EPG scanning
   int transport;                     // VTSATIP_TRANSPORT_*
   std::string mcastInterface;        // address of the local interface used for multicast, empty = system choice
@@ -81,7 +82,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)

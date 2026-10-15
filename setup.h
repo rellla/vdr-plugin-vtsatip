@@ -19,6 +19,7 @@ private:
   int discoveryM;       // index in discoveryTextsM: 0 = automatic, 1 = off, 2 = on
   int eitScanM;
   int disconnectIdleM;
+  int allPidsM;
   int traceM;
   int transportM;       // VTSATIP_TRANSPORT_*
   const char *transportTextsM[3];

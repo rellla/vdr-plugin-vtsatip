@@ -141,7 +141,10 @@ def handle(conn, addr):
                     if "freq" in q:
                         st.freq = int(q["freq"])
                     if "pids" in q:
-                        st.pids = set() if q["pids"] == "none" else set(int(x) for x in q["pids"].split(","))
+                        if q["pids"] == "all":
+                            st.pids = {0, 16, 17, 18, 100, 200}  # "everything" of the fake transponder
+                        else:
+                            st.pids = set() if q["pids"] == "none" else set(int(x) for x in q["pids"].split(","))
                     if "addpids" in q:
                         st.pids |= set(int(x) for x in q["addpids"].split(","))
                     if "delpids" in q:

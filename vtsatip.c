@@ -93,6 +93,7 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -p START-END, --portrange=START-END\n"
          "                           RTP/RTCP port range (default 45000-47000)\n"
          "  -r SIZE,  --rcvbuf=SIZE  RTP socket receive buffer in bytes (default 2097152)\n"
+         "  -a,       --allpids      request the whole transponder (pids=all), needs a lot of bandwidth\n"
          "  -A,       --detached     start with all devices detached (see SVDRP ATTA)\n"
          "  -N,       --nodisconnect do not tear down the stream when a device becomes idle\n"
          "  -R,       --norealtime   do not try to give the RTP threads realtime priority\n"
@@ -229,12 +230,13 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "rcvbuf",       required_argument, NULL, 'r' },
     { "nodisconnect", no_argument,       NULL, 'N' },
     { "norealtime",   no_argument,       NULL, 'R' },
+    { "allpids",      no_argument,       NULL, 'a' },
     { "detached",     no_argument,       NULL, 'A' },
     { "trace",        required_argument, NULL, 't' },
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:S:QT:b:p:r:NRAt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:S:QT:b:p:r:NRAat:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -310,6 +312,9 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                break;
           case 'R':
                VtSatipConfig.realtime = false;
+               break;
+          case 'a':
+               VtSatipConfig.allPids = true;
                break;
           case 'A':
                VtSatipConfig.detached = true;

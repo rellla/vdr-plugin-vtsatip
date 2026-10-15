@@ -39,8 +39,21 @@ int main(int argc, char **argv) {
   }
   if (mode == "tcp" || mode == "notcp" || mode == "refusetcp")
     VtSatipConfig.transport = VTSATIP_TRANSPORT_TCP;
+  if (mode == "allpids")
+    VtSatipConfig.allPids = true;
   Sink sink; cVtTuner t(sink);
-  if (mode == "tcp") {
+  if (mode == "allpids") {
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.HasPid(200) && sink.HasPid(100); }, 4000), "all PIDs arrive without asking for them");
+    int plays = Count(LogText("server.log"), "REQ PLAY");
+    t.SetPid(300, true); t.SetPid(301, true);
+    usleep(300000);
+    CHECK(Count(LogText("server.log"), "REQ PLAY") == plays, "PID changes send nothing");
+    CHECK(LogText("server.log").find("pids=all") != std::string::npos, "PLAY carries pids=all");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune works");
+  }
+  else if (mode == "tcp") {
     t.SetChannel(TP1);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "stream received interleaved in the RTSP connection");
     CHECK(Count(LogText("server.log"), "REQ SETUP") == 1, "one SETUP (no fallback)");

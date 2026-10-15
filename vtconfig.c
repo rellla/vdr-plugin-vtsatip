@@ -194,6 +194,8 @@ bool cVtSatipConfig::SetupParse(const char *nameP, const char *valueP)
      eitScan = v != 0;
   else if (!strcasecmp(nameP, "DisconnectIdle"))
      disconnectIdle = v != 0;
+  else if (!strcasecmp(nameP, "AllPids"))
+     allPids = v != 0;
   else if (!strcasecmp(nameP, "Transport")) {
      if (v != VTSATIP_TRANSPORT_UNICAST && v != VTSATIP_TRANSPORT_MULTICAST && v != VTSATIP_TRANSPORT_TCP)
         return false;

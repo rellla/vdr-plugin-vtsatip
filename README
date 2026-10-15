@@ -54,6 +54,7 @@ Aufruf / Umstellung von vtuner-ng
   -b ADRESSE       lokale Schnittstelle (IP) für Multicast-Beitritt
   -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
   -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
+  -a               ganzen Transponder anfordern (pids=all), braucht viel Bandbreite
   -N               Stream bei Leerlauf nicht abbauen
   -R               keine Echtzeitpriorität versuchen
   -t 1             Tracing: RTSP-Verkehr und Tuning im Syslog

@@ -348,6 +348,8 @@ cVtTuner::~cVtTuner()
 
 std::set<int> cVtTuner::WantedPids(void)
 {
+  if (VtSatipConfig.allPids) // the server sends everything, VDR picks what it needs
+     return std::set<int>(&kAllPids, &kAllPids + 1);
   std::set<int> pids = wantPidsM;
   pids.insert(wantPmtM.begin(), wantPmtM.end()); // the CI needs the PMT in the stream
   for (int i = 0; i < VTSATIP_STDPID_COUNT; ++i)
@@ -357,6 +359,8 @@ std::set<int> cVtTuner::WantedPids(void)
 
 std::string cVtTuner::JoinPids(const std::set<int> &pidsP)
 {
+  if (pidsP.count(kAllPids))
+     return "all";
   std::string s;
   for (std::set<int>::const_iterator it = pidsP.begin(); it != pidsP.end(); ++it) {
       if (!s.empty())
@@ -678,6 +682,16 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
 
 bool cVtTuner::DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP)
 {
+  if (wantP.count(kAllPids) != activePidsM.count(kAllPids)) {
+     // switching between "all" and a PID list (setup change): send the complete list
+     std::string q = "pids=" + JoinPids(wantP) + CiParams(pmtP, ciSlotP);
+     vtdebug("device %d: pids %s", indexM, q.c_str());
+     if (!rtspM.Play(q.c_str()))
+        return false;
+     activePidsM = wantP;
+     activePmtM = pmtP;
+     return true;
+     }
   std::string add, del;
   for (std::set<int>::const_iterator it = wantP.begin(); it != wantP.end(); ++it)
       if (!activePidsM.count(*it))

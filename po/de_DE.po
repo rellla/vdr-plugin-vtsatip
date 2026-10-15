@@ -50,6 +50,9 @@ msgstr "VDR-Gerät %d: Server-Frontend"
 msgid "auto"
 msgstr "automatisch"
 
+msgid "Request all PIDs (pids=all)"
+msgstr "Alle PIDs anfordern (pids=all)"
+
 msgid "Tracing"
 msgstr "Protokollierung (Trace)"
 

@@ -73,6 +73,9 @@ public:
   int RtcpPort(void) const { return rtpPortM + 1; }
 };
 
+// pseudo PID in a PID set: the whole transponder (pids=all)
+static const int kAllPids = -1;
+
 class cVtTuner : public cThread {
   friend class cVtReceiver;
 private:
