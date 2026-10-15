@@ -1,6 +1,10 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-15: Version 0.6.0
+- RTP over TCP (-T tcp, setup menu): RTP/RTCP interleaved into the RTSP
+  connection ("$" frames), automatic fallback to UDP per server.
+
 2026-10-15: Version 0.5.0
 - Self-healing server compatibility: session IDs with leading zeros,
   servers without addpids/delpids, refused retune on a running session

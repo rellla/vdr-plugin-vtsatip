@@ -21,7 +21,7 @@ private:
   int disconnectIdleM;
   int traceM;
   int transportM;       // VTSATIP_TRANSPORT_*
-  const char *transportTextsM[2];
+  const char *transportTextsM[3];
   int ciSlotM[VTSATIP_MAX_DEVICES];
   char caIdsM[128];
   char sidsM[128];

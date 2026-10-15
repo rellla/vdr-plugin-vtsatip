@@ -84,9 +84,11 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -Q,       --noci-restart do not restart a stream when its CI state changes\n"
          "                           (default: restart, needed by e.g. Digital Devices OctopusNet)\n"
          "  -T MODE,  --transport=MODE\n"
-         "                           how the stream is delivered: unicast (default) or multicast;\n"
+         "                           how the stream is delivered: unicast (default), multicast or tcp;\n"
          "                           multicast needs IGMP snooping in the switch and falls back to\n"
-         "                           unicast for servers which do not offer it\n"
+         "                           unicast for servers which do not offer it; tcp (RTP over TCP,\n"
+         "                           interleaved into the RTSP connection) is for networks where\n"
+         "                           UDP gets lost, e.g. WLAN/VPN, and falls back to UDP as well\n"
          "  -b ADDR,  --bind=ADDR    address of the local network interface used to join multicast groups\n"
          "  -p START-END, --portrange=START-END\n"
          "                           RTP/RTCP port range (default 45000-47000)\n"
@@ -287,8 +289,10 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                   VtSatipConfig.transport = VTSATIP_TRANSPORT_UNICAST;
                else if (!strcasecmp(optarg, "multicast"))
                   VtSatipConfig.transport = VTSATIP_TRANSPORT_MULTICAST;
+               else if (!strcasecmp(optarg, "tcp"))
+                  VtSatipConfig.transport = VTSATIP_TRANSPORT_TCP;
                else {
-                  fprintf(stderr, "vtsatip: invalid transport '%s' (unicast or multicast)\n", optarg);
+                  fprintf(stderr, "vtsatip: invalid transport '%s' (unicast, multicast or tcp)\n", optarg);
                   return false;
                   }
                break;

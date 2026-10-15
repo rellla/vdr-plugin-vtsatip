@@ -30,6 +30,6 @@ int main(){
   CHECK(s.SetupParse("CISlotDevice1", "2") && s.ciSlot[1] == 2 && !s.SetupParse("CISlotDevice1", "9") && s.ciSlot[1] == 2, "setup: CI slot per device");
   CHECK(s.SetupParse("Discovery", "-1") && s.UseDiscovery() && s.SetupParse("Discovery", "0") && !s.UseDiscovery() && s.SetupParse("Discovery", "1") && s.UseDiscovery(), "setup: discovery modes");
   CHECK(s.SetupParse("EnableEITScan", "0") && !s.eitScan && s.SetupParse("DisconnectIdle", "0") && !s.disconnectIdle && s.SetupParse("Trace", "1") && s.trace == 1 && s.SetupParse("CIRestart", "0") && !s.ciRestart, "setup: simple switches");
-  CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7"), "setup: transport");
+  CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7") && s.SetupParse("Transport", "2") && s.transport == VTSATIP_TRANSPORT_TCP, "setup: transport");
   CHECK(!s.SetupParse("Nonsense", "1"), "setup: unknown names are reported");
   printf("%s\n", fails?"SOME TESTS FAILED":"ALL TESTS PASSED"); return fails; }

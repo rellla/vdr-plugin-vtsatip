@@ -37,8 +37,39 @@ int main(int argc, char **argv) {
     VtSatipConfig.transport = VTSATIP_TRANSPORT_MULTICAST;
     VtSatipConfig.mcastInterface = "127.0.0.1";
   }
+  if (mode == "tcp" || mode == "notcp" || mode == "refusetcp")
+    VtSatipConfig.transport = VTSATIP_TRANSPORT_TCP;
   Sink sink; cVtTuner t(sink);
-  if (mode == "mcast") {
+  if (mode == "tcp") {
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "stream received interleaved in the RTSP connection");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 1, "one SETUP (no fallback)");
+    CHECK(WaitFor([&]{ return t.SignalQuality() == 100; }, 2000), "RTCP arrives on the interleaved RTCP channel");
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return sink.HasPid(100); }, 3000), "PID changes work while data is flowing on the control connection");
+    for (int i = 0; i < 20; ++i) { // many requests between data frames
+      t.SetPid(200 + i, true);
+      usleep(20000);
+    }
+    CHECK(WaitFor([&]{ return sink.HasPid(219); }, 3000), "20 quick PID changes");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune inside the TCP session");
+    t.Release();
+    usleep(300000);
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "new TCP session after release");
+  }
+  else if (mode == "notcp" || mode == "refusetcp") {
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 5000), "falls back to UDP");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 2, "second SETUP is the UDP one");
+    t.Release();
+    usleep(300000);
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "works afterwards");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 3, "server is remembered as TCP-less");
+  }
+  else if (mode == "mcast") {
     t.SetChannel(TP1);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "stream received through the multicast group");
     CHECK(Count(LogText("server.log"), "REQ SETUP") == 1, "one SETUP (no fallback)");

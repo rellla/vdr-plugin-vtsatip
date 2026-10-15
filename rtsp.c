@@ -28,7 +28,13 @@ cVtRtsp::cVtRtsp(void)
   cseqM(1),
   streamIdM(-1),
   timeoutS(30),
-  lastStatusM(0)
+  lastStatusM(0),
+  wantersM(0),
+  tcpModeM(false),
+  brokenM(false),
+  ilenM(0),
+  handlerM(NULL),
+  handlerCtxM(NULL)
 {
   sessionM[0] = 0;
   rxM[0] = 0;
@@ -39,8 +45,16 @@ cVtRtsp::~cVtRtsp()
   Close();
 }
 
+void cVtRtsp::LockIo(void)
+{
+  ++wantersM;
+  ioM.lock();
+  --wantersM;
+}
+
 void cVtRtsp::Close(void)
 {
+  LockIo();
   if (fdM >= 0) {
      close(fdM);
      fdM = -1;
@@ -51,6 +65,10 @@ void cVtRtsp::Close(void)
   timeoutS = 30;
   lastStatusM = 0;
   transportM = cVtTransport();
+  tcpModeM = false;
+  brokenM = false;
+  ilenM = 0;
+  ioM.unlock();
 }
 
 bool cVtRtsp::WaitFd(short eventsP, int timeoutMsP)
@@ -93,6 +111,10 @@ bool cVtRtsp::Connect(const char *hostP, int portP, int timeoutMsP)
       fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
       int one = 1;
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+      if (VtSatipConfig.rcvBufSize > 0) { // large bursts of interleaved data
+         int sz = VtSatipConfig.rcvBufSize;
+         setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sz, sizeof(sz));
+         }
       fdM = fd;
       if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0)
          ok = true;
@@ -133,11 +155,11 @@ bool cVtRtsp::Send(const char *requestP)
   return true;
 }
 
-const char *cVtRtsp::Header(const char *nameP) const
+static const char *HeaderIn(const char *textP, const char *nameP)
 {
   // case insensitive header search, returns pointer to the value
   size_t nlen = strlen(nameP);
-  const char *p = strstr(rxM, "\r\n");
+  const char *p = strstr(textP, "\r\n");
   while (p) {
         p += 2;
         if (!strncasecmp(p, nameP, nlen) && p[nlen] == ':') {
@@ -151,10 +173,17 @@ const char *cVtRtsp::Header(const char *nameP) const
   return NULL;
 }
 
+const char *cVtRtsp::Header(const char *nameP) const
+{
+  return HeaderIn(rxM, nameP);
+}
+
 bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
 {
   vtdebug("RTSP >>> %s", requestP);
   lastStatusM = 0;
+  LockIo();
+  std::lock_guard<std::mutex> guard(ioM, std::adopt_lock);
   if (!Send(requestP))
      return false;
 
@@ -163,7 +192,9 @@ bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
   int bodyLen = 0;
   cTimeMs timer(timeoutMsP);
   rxM[0] = 0;
-  while (true) {
+  if (tcpModeM && !TransactTcp(timeoutMsP))
+     return false;
+  while (!tcpModeM) {
         int left = timeoutMsP - (int)timer.Elapsed();
         if (left <= 0 || !WaitFd(POLLIN, left)) {
            vterror("RTSP: response timeout");
@@ -238,7 +269,17 @@ static void ParseTransport(const char *valueP, cVtTransport &tP)
   while (pos <= line.size()) {
         size_t semi = line.find(';', pos);
         std::string tok = line.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
-        if (tok == "multicast")
+        if (!strncasecmp(tok.c_str(), "RTP/AVP/TCP", 11))
+           tP.tcp = true;
+        else if (!strncasecmp(tok.c_str(), "interleaved=", 12)) {
+           int a = 0, b = 0;
+           int k = sscanf(tok.c_str() + 12, "%d-%d", &a, &b);
+           if (k >= 1) {
+              tP.rtpChannel = a;
+              tP.rtcpChannel = (k >= 2) ? b : a + 1;
+              }
+           }
+        else if (tok == "multicast")
            tP.multicast = true;
         else if (!strncasecmp(tok.c_str(), "destination=", 12))
            tP.destination = tok.substr(12);
@@ -263,7 +304,10 @@ bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP, int modeP)
 {
   char req[1536];
   char transport[96];
-  if (modeP == VTSATIP_TRANSPORT_MULTICAST)
+  tcpModeM = (modeP == VTSATIP_TRANSPORT_TCP);
+  if (tcpModeM)
+     snprintf(transport, sizeof(transport), "RTP/AVP/TCP;unicast;interleaved=0-1");
+  else if (modeP == VTSATIP_TRANSPORT_MULTICAST)
      snprintf(transport, sizeof(transport), "RTP/AVP;multicast");
   else
      snprintf(transport, sizeof(transport), "RTP/AVP;unicast;client_port=%d-%d", rtpPortP, rtcpPortP);
@@ -305,7 +349,9 @@ bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP, int modeP)
      ParseTransport(tr, transportM);
   else
      transportM = cVtTransport();
-  vtdebug("RTSP: stream=%d session=%s timeout=%d%s", streamIdM, sessionM, timeoutS, transportM.multicast ? " multicast" : "");
+  if (tcpModeM && !transportM.tcp)
+     tcpModeM = false; // the server chose UDP; the caller sees it in Transport()
+  vtdebug("RTSP: stream=%d session=%s timeout=%d%s%s", streamIdM, sessionM, timeoutS, transportM.multicast ? " multicast" : "", transportM.tcp ? " tcp" : "");
   return true;
 }
 
@@ -354,4 +400,119 @@ bool cVtRtsp::Teardown(void)
   streamIdM = -1;
   sessionM[0] = 0;
   return r;
+}
+
+// --- RTP over TCP -------------------------------------------------------------------------------------------------
+// Everything below runs with ioM held.
+
+// Walks through the received bytes: '$'-frames go to the handler, RTSP messages are skipped, or - when wantResponseP -
+// the first one is copied to rxM.
+int cVtRtsp::ParseInput(bool wantResponseP)
+{
+  int result = 0;
+  size_t pos = 0;
+  while (pos < ilenM) {
+        const uchar *p = &ibufM[pos];
+        size_t avail = ilenM - pos;
+        if (p[0] == '$') {
+           if (avail < 4)
+              break;
+           size_t len = (size_t)((p[2] << 8) | p[3]);
+           if (avail < 4 + len)
+              break;
+           if (handlerM)
+              handlerM(handlerCtxM, p[1], p + 4, (int)len);
+           pos += 4 + len;
+           continue;
+           }
+        if (p[0] != 'R') { // neither a frame nor "RTSP/1.0": resynchronise
+           ++pos;
+           continue;
+           }
+        const uchar *e = (const uchar *)memmem(p, avail, "\r\n\r\n", 4);
+        if (!e) {
+           if (avail > (size_t)eMaxResponse) // nonsense
+              pos = ilenM;
+           break;
+           }
+        size_t hdr = (size_t)(e - p) + 4;
+        char tmp[eMaxResponse + 1];
+        size_t cp = hdr < (size_t)eMaxResponse ? hdr : (size_t)eMaxResponse;
+        memcpy(tmp, p, cp);
+        tmp[cp] = 0;
+        const char *cl = HeaderIn(tmp, "Content-Length");
+        size_t total = hdr + (cl && atoi(cl) > 0 ? (size_t)atoi(cl) : 0);
+        if (avail < total)
+           break;
+        pos += total;
+        if (wantResponseP) {
+           memcpy(rxM, tmp, cp + 1);
+           result = 1;
+           break;
+           }
+        }
+  if (pos > 0) {
+     if (pos < ilenM)
+        memmove(&ibufM[0], &ibufM[pos], ilenM - pos);
+     ilenM -= pos;
+     }
+  return result;
+}
+
+bool cVtRtsp::TransactTcp(int timeoutMsP)
+{
+  if (ibufM.empty())
+     ibufM.resize(128 * 1024);
+  cTimeMs timer(timeoutMsP);
+  rxM[0] = 0;
+  while (true) {
+        if (ParseInput(true) > 0)
+           return true;
+        if (ilenM >= ibufM.size()) { // a frame larger than the buffer, cannot be: start over
+           ilenM = 0;
+           continue;
+           }
+        int left = timeoutMsP - (int)timer.Elapsed();
+        if (left <= 0 || !WaitFd(POLLIN, left)) {
+           vterror("RTSP: response timeout");
+           return false;
+           }
+        ssize_t n = recv(fdM, &ibufM[ilenM], ibufM.size() - ilenM, 0);
+        if (n == 0) {
+           vterror("RTSP: connection closed by server");
+           return false;
+           }
+        if (n < 0) {
+           if (errno == EAGAIN || errno == EINTR)
+              continue;
+           return false;
+           }
+        ilenM += (size_t)n;
+        }
+}
+
+bool cVtRtsp::Pump(int timeoutMsP)
+{
+  LockIo();
+  std::lock_guard<std::mutex> guard(ioM, std::adopt_lock);
+  if (fdM < 0 || !tcpModeM || brokenM)
+     return false;
+  if (ibufM.empty())
+     ibufM.resize(128 * 1024);
+  ParseInput(false);
+  if (ilenM >= ibufM.size())
+     ilenM = 0;
+  if (WaitFd(POLLIN, timeoutMsP)) {
+     ssize_t n = recv(fdM, &ibufM[ilenM], ibufM.size() - ilenM, MSG_DONTWAIT);
+     if (n == 0) {
+        vterror("RTSP: connection closed by server");
+        brokenM = true;
+        return false;
+        }
+     if (n > 0) {
+        ilenM += (size_t)n;
+        ParseInput(false);
+        }
+     }
+  return true;
 }

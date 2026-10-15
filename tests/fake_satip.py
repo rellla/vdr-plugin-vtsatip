@@ -5,7 +5,7 @@ import socket, threading, time, struct, sys, re, os, signal
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8554
 LOG = sys.argv[2] if len(sys.argv) > 2 else "server.log"
 TIMEOUT = int(sys.argv[3]) if len(sys.argv) > 3 else 30
-FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast
+FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast tcp refusetcp
 MCAST_GROUP, MCAST_PORT = "239.255.77.7", int(os.environ.get("FAKE_MCAST_PORT", "5004"))
 lock = threading.Lock()
 
@@ -24,6 +24,13 @@ class Stream:
         self.cc = {}
         self.started = False
         self.mcast = False
+        self.tcp = False
+        self.conn = None
+        self.sendlock = threading.Lock()
+
+    def send(self, data):
+        with self.sendlock:
+            self.conn.sendall(data)
 
     def packets(self):
         out = b""
@@ -37,7 +44,7 @@ def sender(st, sock):
     last_rtcp = 0
     while st.alive:
         time.sleep(0.005)
-        if not st.started or not (st.client or st.mcast) or not st.pids or not st.freq:
+        if not st.started or not (st.client or st.mcast or st.tcp) or not st.pids or not st.freq:
             continue
         data = st.packets()
         # at most 7 TS packets per datagram
@@ -45,7 +52,10 @@ def sender(st, sock):
             chunk = data[i:i + 188 * 7]
             st.seq = (st.seq + 1) & 0xffff
             hdr = struct.pack(">BBHII", 0x80, 33, st.seq, int(time.time() * 90000) & 0xffffffff, 1)
-            sock.sendto(hdr + chunk, (MCAST_GROUP, MCAST_PORT) if st.mcast else (st.client[0], st.client[1]))
+            if st.tcp:
+                st.send(b"$" + bytes([0]) + struct.pack(">H", len(hdr + chunk)) + hdr + chunk)
+            else:
+                sock.sendto(hdr + chunk, (MCAST_GROUP, MCAST_PORT) if st.mcast else (st.client[0], st.client[1]))
         if time.time() - last_rtcp > 0.3:
             last_rtcp = time.time()
             s = b"ver=1.0;src=1;tuner=1,224,1,15,%d,h,dvbs2,8psk,off,0.35,22000,23;pids=0" % st.freq
@@ -55,10 +65,14 @@ def sender(st, sock):
             # length field = words - 1 including header
             words = (len(pkt)) // 4
             pkt = struct.pack(">BBHI", 0x80, 204, words - 1, 1) + body
-            sock.sendto(pkt, (MCAST_GROUP, MCAST_PORT + 1) if st.mcast else (st.client[0], st.client[1] + 1))
+            if st.tcp:
+                st.send(b"$" + bytes([1]) + struct.pack(">H", len(pkt)) + pkt)
+            else:
+                sock.sendto(pkt, (MCAST_GROUP, MCAST_PORT + 1) if st.mcast else (st.client[0], st.client[1] + 1))
 
 def handle(conn, addr):
     st = Stream()
+    st.conn = conn
     usock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
     usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
@@ -83,7 +97,7 @@ def handle(conn, addr):
                 extra = ""
                 def refuse(code, text):
                     log("REFUSED %s %d" % (method, code))
-                    conn.sendall(("RTSP/1.0 %d %s\r\nCSeq: %s\r\n\r\n" % (code, text, cseq)).encode())
+                    st.send(("RTSP/1.0 %d %s\r\nCSeq: %s\r\n\r\n" % (code, text, cseq)).encode())
                 if "busy" in FLAGS and method == "SETUP":
                     refuse(503, "Service Unavailable")
                     continue
@@ -101,12 +115,21 @@ def handle(conn, addr):
                     if want_mc and "refusemcast" in FLAGS:
                         refuse(461, "Unsupported Transport")
                         continue
+                    want_tcp = "RTP/AVP/TCP" in hdrs.get("transport", "")
+                    if want_tcp and "refusetcp" in FLAGS:
+                        refuse(461, "Unsupported Transport")
+                        continue
+                    st.tcp = want_tcp and "tcp" in FLAGS
                     m = re.search(r"client_port=(\d+)-(\d+)", hdrs.get("transport", ""))
                     st.client = (addr[0], int(m.group(1))) if m else None
                     st.mcast = want_mc and "nomcast" not in FLAGS
                     st.freq = int(q.get("freq", "0"))
                     extra = "Session: %s;timeout=%d\r\ncom.ses.streamID: 7\r\n" % ("00ABCD1234" if "zeros" in FLAGS else "ABCD1234", TIMEOUT)
-                    if st.mcast:
+                    if st.tcp:
+                        extra += "Transport: RTP/AVP/TCP;unicast;interleaved=0-1\r\n"
+                    elif want_tcp:
+                        extra += "Transport: RTP/AVP;unicast;server_port=5000-5001\r\n"
+                    elif st.mcast:
                         extra += "Transport: RTP/AVP;multicast;destination=%s;port=%d-%d;ttl=2\r\n" % (MCAST_GROUP, MCAST_PORT, MCAST_PORT + 1)
                     elif want_mc:
                         extra += "Transport: RTP/AVP;unicast;server_port=5000-5001\r\n"
@@ -130,7 +153,7 @@ def handle(conn, addr):
                 elif method == "TEARDOWN":
                     st.started = False
                 resp = "RTSP/1.0 200 OK\r\nCSeq: %s\r\n%s\r\n" % (cseq, extra)
-                conn.sendall(resp.encode())
+                st.send(resp.encode())
     except Exception as e:
         log("ERR %r" % e)
     finally:

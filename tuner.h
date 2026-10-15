@@ -49,6 +49,10 @@ private:
   int rtcpFdM;
   std::atomic<int> rtpPortM;
   bool multicastM;
+  std::atomic<cVtRtsp *> tcpRtspM;   // RTP over TCP: the RTSP connection carries the stream
+  std::atomic<int> tcpRtpChM;
+  std::atomic<int> tcpRtcpChM;
+  static void OnInterleaved(void *ctxP, int channelP, const uchar *dataP, int lengthP);
   void CloseSocketsLocked(void);
   void ProcessRtp(const uchar *bufP, int lenP);
   void ProcessRtcp(const uchar *bufP, int lenP);
@@ -61,6 +65,8 @@ public:
   // join the multicast group of the stream (source = SSM source or empty)
   bool OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP);
   void ResetUnicast(void) { Open(); }
+  // RTP over TCP: read the stream from the RTSP connection (NULL = back to the UDP sockets)
+  void SetTcp(cVtRtsp *rtspP, int rtpChannelP = 0, int rtcpChannelP = 1);
   bool IsMulticast(void) const { return multicastM; }
   void Stop(void);
   int RtpPort(void) const { return rtpPortM; }
@@ -99,7 +105,9 @@ private:
   bool sessionHadPmtM;
   bool fullPidListM;        // the server does not understand addpids/delpids
   bool multicastActiveM;    // the current session delivers its stream by multicast
+  bool tcpActiveM;          // ... or interleaved into the RTSP connection
   std::set<std::string> noMulticastM; // servers (host:port) which refused multicast
+  std::set<std::string> noTcpM;       // servers which refused RTP over TCP
   int failStatusM;          // RTSP status of the last failed tuning
   cTimeMs keepAliveM;
   cVtReceiver receiverM;

@@ -13,7 +13,7 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
   eitScanM(VtSatipConfig.eitScan),
   disconnectIdleM(VtSatipConfig.disconnectIdle),
   traceM(VtSatipConfig.trace ? 1 : 0),
-  transportM(VtSatipConfig.transport == VTSATIP_TRANSPORT_MULTICAST ? 1 : 0),
+  transportM(VtSatipConfig.transport),
   serverLinesM(0)
 {
   for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
@@ -27,6 +27,7 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
   discoveryTextsM[2] = trVDR("yes");
   transportTextsM[0] = tr("unicast");
   transportTextsM[1] = tr("multicast");
+  transportTextsM[2] = tr("TCP");
   SetMenuCategory(mcSetupPlugins);
   Setup();
   SetHelp(trVDR("Button$Scan"), NULL, NULL, NULL);
@@ -37,7 +38,7 @@ void cMenuSetupVtSatip::Setup(void)
   int current = Current();
   Clear();
   Add(new cMenuEditStraItem(tr("UPnP discovery"), &discoveryM, 3, discoveryTextsM));
-  Add(new cMenuEditStraItem(tr("Transport mode"), &transportM, 2, transportTextsM));
+  Add(new cMenuEditStraItem(tr("Transport mode"), &transportM, 3, transportTextsM));
   Add(new cMenuEditBoolItem(tr("Enable EPG scanning"), &eitScanM));
   Add(new cMenuEditBoolItem(tr("Disconnect idle streams"), &disconnectIdleM));
   Add(new cMenuEditBoolItem(tr("Enable CI extension"), &ciExtensionM));
@@ -99,7 +100,7 @@ void cMenuSetupVtSatip::Store(void)
   VtSatipConfig.eitScan = eitScanM != 0;
   VtSatipConfig.disconnectIdle = disconnectIdleM != 0;
   VtSatipConfig.trace = traceM;
-  VtSatipConfig.transport = transportM ? VTSATIP_TRANSPORT_MULTICAST : VTSATIP_TRANSPORT_UNICAST;
+  VtSatipConfig.transport = transportM;
   SetupStore("Transport", VtSatipConfig.transport);
   SetupStore("EnableCIExtension", ciExtensionM);
   SetupStore("CIRestart", ciRestartM);

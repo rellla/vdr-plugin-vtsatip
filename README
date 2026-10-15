@@ -50,7 +50,7 @@ Aufruf / Umstellung von vtuner-ng
   -c CAIDS         CI-Erweiterung: CA-IDs je CI-Slot des Servers (siehe unten)
   -i LISTE         CI-Slot (1..4) je VDR-Gerät, 0 = keiner, z. B. -i 1,0
   -Q               Stream bei Änderung des CI-Zustands NICHT neu starten
-  -T MODUS         unicast (Standard) oder multicast
+  -T MODUS         unicast (Standard), multicast oder tcp
   -b ADRESSE       lokale Schnittstelle (IP) für Multicast-Beitritt
   -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
   -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
@@ -161,6 +161,18 @@ gesamte Netz (vor allem WLAN) mit dem Stream geflutet. -b ist nötig, wenn der
 Rechner mehrere Netzwerkschnittstellen hat. Im Setup-Menü: "Übertragungsart".
 Die Einstellung gilt für neue Sessions.
 
+RTP über TCP (ab 0.6.0)
+-----------------------
+  vdr -P 'vtsatip -T tcp'
+
+Das SETUP enthält "Transport: RTP/AVP/TCP;unicast;interleaved=0-1". Der Server
+schickt RTP (Kanal 0) und RTCP (Kanal 1) dann als "$"-Frames über dieselbe
+TCP-Verbindung wie die RTSP-Antworten; es werden keine UDP-Ports benötigt
+(Firewall, NAT, VPN). Nachteil: TCP-Retransmits können Latenz erzeugen, bei
+Paketverlust staut sich der Stream. Für das normale LAN ist UDP besser.
+Antwortet ein Server mit einem Fehler oder mit UDP, wird für ihn automatisch
+UDP-Unicast verwendet. Im Setup-Menü: "Übertragungsart" = TCP.
+
 Server-Eigenheiten (Quirks)
 ---------------------------
 Statt einer Tabelle mit Gerätenamen reagiert das Plugin selbst auf Server,
@@ -208,7 +220,7 @@ CISlotDevice0..n, Discovery (-1/0/1), EnableEITScan, DisconnectIdle, Trace.
 Nicht enthalten (bewusst)
 -------------------------
  * "CI TNR"-Erweiterung (herstellerspezifisch, DVBViewer).
- * Multicast-Streaming, RTP-over-TCP, IPv6.
+ * IPv6.
 
 Zum Optimieren
 --------------

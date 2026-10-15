@@ -26,7 +26,10 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
   rtpFdM(-1),
   rtcpFdM(-1),
   rtpPortM(-1),
-  multicastM(false)
+  multicastM(false),
+  tcpRtspM(NULL),
+  tcpRtpChM(0),
+  tcpRtcpChM(1)
 {
 }
 
@@ -161,6 +164,25 @@ bool cVtReceiver::OpenMulticast(const std::string &groupP, const std::string &so
   return true;
 }
 
+void cVtReceiver::OnInterleaved(void *ctxP, int channelP, const uchar *dataP, int lengthP)
+{
+  cVtReceiver *self = (cVtReceiver *)ctxP;
+  if (channelP == self->tcpRtpChM.load())
+     self->ProcessRtp(dataP, lengthP);
+  else if (channelP == self->tcpRtcpChM.load())
+     self->ProcessRtcp(dataP, lengthP);
+}
+
+void cVtReceiver::SetTcp(cVtRtsp *rtspP, int rtpChannelP, int rtcpChannelP)
+{
+  if (rtspP) {
+     tcpRtpChM = rtpChannelP;
+     tcpRtcpChM = rtcpChannelP;
+     rtspP->SetInterleavedHandler(&cVtReceiver::OnInterleaved, this);
+     }
+  tcpRtspM = rtspP;
+}
+
 void cVtReceiver::Stop(void)
 {
   if (Running())
@@ -231,6 +253,15 @@ void cVtReceiver::Action(void)
      }
   uchar buf[4096];
   while (Running()) {
+        cVtRtsp *tcp = tcpRtspM.load();
+        if (tcp) { // RTP over TCP: the tuner thread owns the connection, we read the stream from it
+           if (!tcp->Pump(50))
+              cCondWait::SleepMs(20);
+           // not fair either: let a pending RTSP request go first
+           for (int i = 0; i < 200 && tcp->WaitingThreads() > 0; ++i)
+               cCondWait::SleepMs(1);
+           continue;
+           }
         sockMutexM.Lock(); // sockets are replaced under this mutex (unicast <-> multicast)
         if (rtpFdM < 0 || rtcpFdM < 0) {
            sockMutexM.Unlock();
@@ -283,6 +314,7 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   sessionHadPmtM(false),
   fullPidListM(false),
   multicastActiveM(false),
+  tcpActiveM(false),
   failStatusM(0),
   keepAliveM(),
   receiverM(*this),
@@ -415,13 +447,17 @@ void cVtTuner::DropSession(void)
   sessionUpM = false;
   if (rtspM.IsOpen()) {
      if (rtspM.HasSession())
-        rtspM.Teardown();
+        rtspM.Teardown(); // in TCP mode the receiver may still pump; the RTSP object serialises that
      rtspM.Close();
      }
   activePidsM.clear();
   activePmtM.clear();
   sessionHadPmtM = false;
   fullPidListM = false;
+  if (tcpActiveM) {
+     receiverM.SetTcp(NULL);
+     tcpActiveM = false;
+     }
   if (multicastActiveM) {
      receiverM.ResetUnicast(); // leave the group
      multicastActiveM = false;
@@ -502,9 +538,11 @@ bool cVtTuner::OpenSession(const std::string &hostP, int portP, const std::strin
   DropSession();
   std::string key = hostP + ":" + std::to_string(portP);
   std::string query = paramsP + "&pids=none" + CiParams(pmtP, ciSlotP);
-  int modes[2];
+  int modes[3];
   int n = 0;
-  if (VtSatipConfig.transport == VTSATIP_TRANSPORT_MULTICAST && !noMulticastM.count(key))
+  if (VtSatipConfig.transport == VTSATIP_TRANSPORT_TCP && !noTcpM.count(key))
+     modes[n++] = VTSATIP_TRANSPORT_TCP;
+  else if (VtSatipConfig.transport == VTSATIP_TRANSPORT_MULTICAST && !noMulticastM.count(key))
      modes[n++] = VTSATIP_TRANSPORT_MULTICAST;
   modes[n++] = VTSATIP_TRANSPORT_UNICAST;
   for (int i = 0; i < n; ++i) {
@@ -533,6 +571,23 @@ bool cVtTuner::OpenSession(const std::string &hostP, int portP, const std::strin
             continue;
             }
          }
+      if (ok && modes[i] == VTSATIP_TRANSPORT_TCP) {
+         const cVtTransport &tr = rtspM.Transport();
+         if (tr.tcp) {
+            receiverM.SetTcp(&rtspM, tr.rtpChannel, tr.rtcpChannel);
+            tcpActiveM = true;
+            }
+         else {
+            // the server answered with something else than RTP/AVP/TCP
+            ok = false;
+            if (rtspM.HasSession())
+               rtspM.Teardown();
+            rtspM.Close();
+            noTcpM.insert(key);
+            vtinfo("device %d: server %s does not do RTP over TCP, using UDP", indexM, key.c_str());
+            continue;
+            }
+         }
       if (ok) {
          sessionUpM = true;
          sessionHadPmtM = !pmtP.empty();
@@ -541,8 +596,12 @@ bool cVtTuner::OpenSession(const std::string &hostP, int portP, const std::strin
       failStatusM = rtspM.LastStatus();
       if (modes[i] == VTSATIP_TRANSPORT_UNICAST || failStatusM == 503 || failStatusM == 0)
          break;
-      noMulticastM.insert(key); // e.g. 461 unsupported transport
-      vtinfo("device %d: server %s refused multicast (status %d), using unicast", indexM, key.c_str(), failStatusM);
+      if (modes[i] == VTSATIP_TRANSPORT_TCP)
+         noTcpM.insert(key);
+      else
+         noMulticastM.insert(key); // e.g. 461 unsupported transport
+      vtinfo("device %d: server %s refused %s (status %d), using unicast", indexM, key.c_str(),
+             modes[i] == VTSATIP_TRANSPORT_TCP ? "RTP over TCP" : "multicast", failStatusM);
       }
   DropSession();
   return false;

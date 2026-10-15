@@ -67,3 +67,6 @@ msgstr "  Service-IDs (Slot 1;Slot 2;...)"
 
 msgid "Invalid service ID list"
 msgstr "Ungültige Service-ID-Liste"
+
+msgid "TCP"
+msgstr "TCP"
