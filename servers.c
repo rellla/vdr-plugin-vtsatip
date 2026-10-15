@@ -84,6 +84,8 @@ void cVtServers::AddManual(const std::string &hostP, int portP, const std::strin
   s.manual = true;
   s.expires = 0;
   for (int i = 0; i < VTSATIP_MEDIUM_COUNT; ++i)
+      s.busyUntil[i] = 0;
+  for (int i = 0; i < VTSATIP_MEDIUM_COUNT; ++i)
       s.caps[i] = capsP[i];
   int i = Find(s.id);
   if (i >= 0)
@@ -108,6 +110,8 @@ bool cVtServers::Update(const std::string &idP, const std::string &hostP, int po
   s.name = nameP.empty() ? hostP : nameP;
   s.model = modelP;
   s.manual = false;
+  for (int k = 0; k < VTSATIP_MEDIUM_COUNT; ++k)
+      s.busyUntil[k] = 0;
   s.expires = NowMs() + (uint64_t)(maxAgeSecP > 0 ? maxAgeSecP : 1800) * 1000;
   for (int k = 0; k < VTSATIP_MEDIUM_COUNT; ++k)
       s.caps[k] = capsP[k];
@@ -202,8 +206,11 @@ bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP
         }
      b = cBinding();
      }
+  uint64_t now = NowMs();
   for (size_t i = 0; i < serversM.size(); ++i) {
       const cVtServerInfo &s = serversM[i];
+      if (s.busyUntil[mediumP] > now)
+         continue;
       if (s.caps[mediumP] > Used(s.id, mediumP, deviceP)) {
          b.valid = true;
          b.id = s.id;
@@ -274,4 +281,41 @@ void cVtServers::RemoveDiscovered(void)
       else
          ++i;
       }
+}
+
+void cVtServers::MarkBusy(const std::string &hostP, int portP, int mediumP, int msP)
+{
+  if (mediumP < 0 || mediumP >= VTSATIP_MEDIUM_COUNT)
+     return;
+  cMutexLock lock(&mutexM);
+  for (size_t i = 0; i < serversM.size(); ++i)
+      if (serversM[i].host == hostP && serversM[i].port == portP)
+         serversM[i].busyUntil[mediumP] = NowMs() + msP;
+}
+
+bool cVtServers::Reassign(int deviceP, int mediumP, const std::string &failedHostP, int failedPortP,
+                          std::string &hostP, int &portP, std::string *nameP, int busyMsP)
+{
+  MarkBusy(failedHostP, failedPortP, mediumP, busyMsP);
+  if (deviceP < 0 || deviceP >= VTSATIP_MAX_DEVICES || mediumP < 0 || mediumP >= VTSATIP_MEDIUM_COUNT)
+     return false;
+  cMutexLock lock(&mutexM);
+  uint64_t now = NowMs();
+  for (size_t i = 0; i < serversM.size(); ++i) {
+      const cVtServerInfo &s = serversM[i];
+      if (s.busyUntil[mediumP] > now || (s.host == failedHostP && s.port == failedPortP))
+         continue;
+      if (s.caps[mediumP] > Used(s.id, mediumP, deviceP)) {
+         cBinding &b = bindingsM[deviceP];
+         b.valid = true;
+         b.id = s.id;
+         b.medium = mediumP;
+         hostP = s.host;
+         portP = s.port;
+         if (nameP)
+            *nameP = s.name;
+         return true;
+         }
+      }
+  return false;
 }

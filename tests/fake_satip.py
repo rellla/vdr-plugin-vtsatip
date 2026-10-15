@@ -5,6 +5,7 @@ import socket, threading, time, struct, sys, re, os, signal
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8554
 LOG = sys.argv[2] if len(sys.argv) > 2 else "server.log"
 TIMEOUT = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy
 lock = threading.Lock()
 
 def log(msg):
@@ -76,11 +77,26 @@ def handle(conn, addr):
                 cseq = hdrs.get("cseq", "0")
                 q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                 extra = ""
+                def refuse(code, text):
+                    log("REFUSED %s %d" % (method, code))
+                    conn.sendall(("RTSP/1.0 %d %s\r\nCSeq: %s\r\n\r\n" % (code, text, cseq)).encode())
+                if "busy" in FLAGS and method == "SETUP":
+                    refuse(503, "Service Unavailable")
+                    continue
+                if "zeros" in FLAGS and method != "SETUP" and "session" in hdrs and hdrs["session"].split(";")[0] != "ABCD1234":
+                    refuse(454, "Session Not Found")
+                    continue
+                if "nodelta" in FLAGS and method == "PLAY" and ("addpids" in q or "delpids" in q):
+                    refuse(400, "Bad Request")
+                    continue
+                if "notune" in FLAGS and method == "PLAY" and "freq" in q and st.started:
+                    refuse(454, "Session Not Found")
+                    continue
                 if method == "SETUP":
                     m = re.search(r"client_port=(\d+)-(\d+)", hdrs.get("transport", ""))
                     st.client = (addr[0], int(m.group(1)))
                     st.freq = int(q.get("freq", "0"))
-                    extra = "Session: ABCD1234;timeout=%d\r\ncom.ses.streamID: 7\r\n" % TIMEOUT
+                    extra = "Session: %s;timeout=%d\r\ncom.ses.streamID: 7\r\n" % ("00ABCD1234" if "zeros" in FLAGS else "ABCD1234", TIMEOUT)
                 elif method == "PLAY":
                     if "addpids" in q and "999" in q["addpids"].split(","):
                         log("DROP connection (simulated failure)")

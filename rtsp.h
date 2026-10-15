@@ -19,6 +19,7 @@ private:
   char sessionM[96];
   int streamIdM;
   int timeoutS;
+  int lastStatusM;
   char rxM[eMaxResponse + 1];
 
   bool Send(const char *requestP);
@@ -35,9 +36,12 @@ public:
   bool HasSession(void) const { return streamIdM >= 0; }
   int StreamId(void) const { return streamIdM; }
   int SessionTimeout(void) const { return timeoutS; }
+  // RTSP status of the last request: 0 = no answer (transport problem), otherwise the status code
+  int LastStatus(void) const { return lastStatusM; }
   bool Options(void);
   // query: the part after '?' (without '?')
   bool Setup(const char *queryP, int rtpPortP, int rtcpPortP);
+  bool PlayOnce(const char *queryP);
   bool Play(const char *queryP);
   bool Teardown(void);
 };

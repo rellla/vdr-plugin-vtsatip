@@ -14,6 +14,7 @@ build test_sec test_sec.cpp $P/sectionfilter.c
 build test_tuner test_tuner.cpp $SRC
 build test_ci test_ci.cpp $SRC
 build test_discover test_discover.cpp $SRC
+build test_compat test_compat.cpp $SRC
 echo "### config";   "$OUT/test_cfg" || fail=1
 echo "### sections"; "$OUT/test_sec" || fail=1
 for t in tuner ci; do
@@ -25,6 +26,18 @@ for t in tuner ci; do
   (cd "$OUT" && timeout 90 ./test_$t $PORT 0) || fail=1
   kill $SRV 2>/dev/null
   wait $SRV 2>/dev/null
+done
+# server quirks, handled by generic fallbacks
+for mode in zeros nodelta notune busy; do
+  PORT=$((20000 + RANDOM % 10000)); PORT2=$((PORT + 1))
+  rm -f "$OUT/server.log"
+  python3 fake_satip.py $PORT "$OUT/server.log" 30 $mode & SRV=$!
+  OK=""
+  if [ $mode = busy ]; then python3 fake_satip.py $PORT2 "$OUT/server2.log" 30 & OK=$!; fi
+  sleep 0.5
+  echo "### compat: $mode"
+  (cd "$OUT" && timeout 60 ./test_compat $mode $PORT $PORT2) || fail=1
+  kill $SRV $OK 2>/dev/null; wait $SRV $OK 2>/dev/null
 done
 # UPnP: fake SAT>IP server (RTSP) + fake UPnP device (SSDP/HTTP)
 PORT=$((20000 + RANDOM % 10000)); HTTP=$((PORT + 1)); SSDP=$((PORT + 2))

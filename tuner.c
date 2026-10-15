@@ -200,6 +200,8 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   wantPortM(0),
   activePortM(0),
   sessionHadPmtM(false),
+  fullPidListM(false),
+  failStatusM(0),
   keepAliveM(),
   receiverM(*this),
   acceptM(false),
@@ -337,6 +339,7 @@ void cVtTuner::DropSession(void)
   activePidsM.clear();
   activePmtM.clear();
   sessionHadPmtM = false;
+  fullPidListM = false;
   activeParamsM.clear();
   activeHostM.clear();
   strengthM = qualityM = -1;
@@ -442,24 +445,35 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
   levelM = 0;
   sinkM.OnRetune();
 
-  if (!rtspM.HasSession()) {
-     DropSession();
-     if (!rtspM.Connect(host.c_str(), port))
-        return false;
-     if (!rtspM.Options() ||
-         !rtspM.Setup((params + "&pids=none" + CiParams(pmtP, ciSlotP)).c_str(), receiverM.RtpPort(), receiverM.RtcpPort())) {
-        DropSession();
-        return false;
-        }
-     sessionUpM = true;
-     sessionHadPmtM = !pmtP.empty();
-     }
+  // A server may refuse a retune inside a running session (e.g. FRITZ!WLAN Repeater DVB-C wants a
+  // TEARDOWN first). One retry with a brand-new session handles that without any server list.
+  failStatusM = 0;
   std::string query = params + "&pids=" + JoinPids(pidsP) + CiParams(pmtP, ciSlotP);
-  vtdebug("device %d: tune %s", indexM, query.c_str());
-  if (!rtspM.Play(query.c_str())) {
-     DropSession();
-     return false;
-     }
+  for (int attempt = 0; ; ++attempt) {
+      bool fresh = false;
+      if (!rtspM.HasSession()) {
+         DropSession();
+         if (!rtspM.Connect(host.c_str(), port))
+            return false;
+         if (!rtspM.Options() ||
+             !rtspM.Setup((params + "&pids=none" + CiParams(pmtP, ciSlotP)).c_str(), receiverM.RtpPort(), receiverM.RtcpPort())) {
+            failStatusM = rtspM.LastStatus();
+            DropSession();
+            return false;
+            }
+         sessionUpM = true;
+         sessionHadPmtM = !pmtP.empty();
+         fresh = true;
+         }
+      vtdebug("device %d: tune %s", indexM, query.c_str());
+      if (rtspM.Play(query.c_str()))
+         break;
+      failStatusM = rtspM.LastStatus();
+      DropSession();
+      if (fresh || attempt > 0 || failStatusM < 400)
+         return false;
+      vtinfo("device %d: server refused the retune (status %d), starting a new session", indexM, failStatusM);
+      }
   activeParamsM = params;
   activeHostM = host;
   activePortM = port;
@@ -492,9 +506,19 @@ bool cVtTuner::DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int
      query += std::string(query.empty() ? "" : "&") + "delpids=" + del;
   if (!ci.empty())
      query += std::string(query.empty() ? "" : "&") + ci.substr(1);
+  if (fullPidListM)
+     query = "pids=" + JoinPids(wantP) + ci;
   vtdebug("device %d: pids %s", indexM, query.c_str());
-  if (!rtspM.Play(query.c_str()))
-     return false;
+  if (!rtspM.Play(query.c_str())) {
+     // some servers (FRITZ!WLAN Repeater DVB-C) do not know addpids/delpids: send the complete list instead
+     if (fullPidListM || rtspM.LastStatus() < 400 || (add.empty() && del.empty()))
+        return false;
+     query = "pids=" + JoinPids(wantP) + ci;
+     vtinfo("device %d: server refused addpids/delpids, using complete PID lists", indexM);
+     if (!rtspM.Play(query.c_str()))
+        return false;
+     fullPidListM = true;
+     }
   activePidsM = wantP;
   activePmtM = pmtP;
   return true;
@@ -522,6 +546,10 @@ void cVtTuner::Action(void)
            int port = wantPortM;
            mutexM.Unlock();
            bool ok = DoTune(params, pids, pmt, ci, host, port);
+           if (!ok && failStatusM == 503) {
+              std::string h = host.empty() ? std::string(*VtSatipConfig.host) : host;
+              sinkM.OnServerBusy(h, (host.empty() || port <= 0) ? VtSatipConfig.port : port);
+              }
            mutexM.Lock();
            if (ok) {
               if (wantSeqM == seq)

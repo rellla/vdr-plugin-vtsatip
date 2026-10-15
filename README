@@ -127,6 +127,26 @@ Server, die das nicht brauchen, kann man mit -Q ohne Neustart betreiben.
 Geräte mit CI übernehmen nur Kanäle, deren CA-IDs der Slot kann; VDR
 nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
 
+Server-Eigenheiten (Quirks)
+---------------------------
+Statt einer Tabelle mit Gerätenamen reagiert das Plugin selbst auf Server,
+die vom Standard abweichen:
+
+ * Session-ID mit führenden Nullen, die der Server nur ohne Nullen akzeptiert
+   (GSS.box, Telestar Digibit R1, Inverto IDL-400, Triax TSS 400): wird eine
+   Anfrage abgelehnt, wiederholt das Plugin sie ohne die Nullen.
+ * addpids/delpids unbekannt (FRITZ!WLAN Repeater DVB-C): nach einer
+   Ablehnung wird für diese Session immer die komplette PID-Liste gesendet.
+ * Retune innerhalb einer Session abgelehnt (Fritz: erst TEARDOWN): das Plugin
+   baut sofort eine neue Session auf, ohne Wartezeit.
+ * Pilot-Erkennung fehlt (GSS.box, Digibit, Inverto, Triax, Kathrein): bei
+   DVB-S2 wird immer plts= mitgeschickt (seit 0.1.2).
+ * Frontend-Lock wird nicht gemeldet (Fritz, Schwaiger): ohne Bedeutung, der
+   Lock wird aus dem ersten TS-Paket abgeleitet.
+ * 503 "kein freies Frontend" (belegt durch einen anderen Client): der Server
+   wird für 15 s für diese Empfangsart gesperrt und das Gerät wechselt, wenn
+   vorhanden, auf einen anderen Server. Sonst läuft die Wiederholung alle 5 s.
+
 Setup-Menü (ab 0.4.0)
 ---------------------
 VDR-Setup -> Plugins -> vtsatip. Die Werte stehen in setup.conf und gelten

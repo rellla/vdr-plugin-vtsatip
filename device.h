@@ -38,6 +38,12 @@ private:
   std::atomic<int> tunedSourceM;
   std::atomic<int> tunedTransponderM;
   std::atomic<int> tunedSidM;
+  // what the tuner was told last, to be able to move to another server
+  cMutex lastMutexM;
+  cString lastParamsM;
+  int lastCiM;
+  int lastPmtM;
+  int lastMediumM;
 
   explicit cVtSatipDevice(unsigned int indexP);
   cVtSatipDevice(const cVtSatipDevice &);
@@ -57,6 +63,7 @@ public:
   virtual int SinkIndex(void) { return (int)indexM; }
   virtual void OnTsData(const uchar *dataP, int lengthP);
   virtual void OnRetune(void);
+  virtual void OnServerBusy(const std::string &hostP, int portP);
 
   // cDevice
   virtual bool Ready(void);

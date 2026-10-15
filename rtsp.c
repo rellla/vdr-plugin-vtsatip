@@ -27,7 +27,8 @@ cVtRtsp::cVtRtsp(void)
   portM(VTSATIP_DEFAULT_RTSP_PORT),
   cseqM(1),
   streamIdM(-1),
-  timeoutS(30)
+  timeoutS(30),
+  lastStatusM(0)
 {
   sessionM[0] = 0;
   rxM[0] = 0;
@@ -48,6 +49,7 @@ void cVtRtsp::Close(void)
   sessionM[0] = 0;
   streamIdM = -1;
   timeoutS = 30;
+  lastStatusM = 0;
 }
 
 bool cVtRtsp::WaitFd(short eventsP, int timeoutMsP)
@@ -151,6 +153,7 @@ const char *cVtRtsp::Header(const char *nameP) const
 bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
 {
   vtdebug("RTSP >>> %s", requestP);
+  lastStatusM = 0;
   if (!Send(requestP))
      return false;
 
@@ -201,6 +204,7 @@ bool cVtRtsp::Transact(const char *requestP, int timeoutMsP, int *statusP)
   int status = 0;
   if (sscanf(rxM, "RTSP/%*s %d", &status) != 1)
      return false;
+  lastStatusM = status;
   if (statusP)
      *statusP = status;
   if (status != 200) {
@@ -264,7 +268,28 @@ bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP)
   return true;
 }
 
+// Some servers (GSS.box, Telestar Digibit R1, Inverto IDL-400, Triax TSS 400, ...) hand out session ids
+// with leading zeros but only accept them without. If a request is refused, try again without the zeros.
 bool cVtRtsp::Play(const char *queryP)
+{
+  if (PlayOnce(queryP))
+     return true;
+  if (lastStatusM >= 400 && sessionM[0] == '0' && sessionM[1]) {
+     char saved[sizeof(sessionM)];
+     strcpy(saved, sessionM);
+     const char *p = sessionM;
+     while (*p == '0' && p[1])
+           ++p;
+     memmove(sessionM, p, strlen(p) + 1);
+     vtinfo("RTSP: retrying with session id '%s' (server dislikes leading zeros)", sessionM);
+     if (PlayOnce(queryP))
+        return true;
+     strcpy(sessionM, saved);
+     }
+  return false;
+}
+
+bool cVtRtsp::PlayOnce(const char *queryP)
 {
   if (streamIdM < 0)
      return false;

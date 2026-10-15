@@ -20,6 +20,7 @@ struct cVtServerInfo {
   int caps[VTSATIP_MEDIUM_COUNT];
   bool manual;
   uint64_t expires;    // monotonic ms, 0 = never
+  uint64_t busyUntil[VTSATIP_MEDIUM_COUNT]; // the server refused a stream (503) for this medium
 };
 
 class cVtServers {
@@ -57,6 +58,11 @@ public:
   // binds a device to a server with a free frontend of the medium
   bool Assign(int deviceP, int mediumP, std::string &hostP, int &portP, std::string *nameP = NULL);
   void Unassign(int deviceP);
+  // the server of a device refused a stream (503): remember that for a while and move the device to another
+  // server if there is one with a free frontend (false: nothing else available)
+  void MarkBusy(const std::string &hostP, int portP, int mediumP, int msP);
+  bool Reassign(int deviceP, int mediumP, const std::string &failedHostP, int failedPortP,
+                std::string &hostP, int &portP, std::string *nameP = NULL, int busyMsP = 15000);
   cString Info(void) const;
   std::vector<std::string> InfoLines(void) const;
   void RemoveDiscovered(void);

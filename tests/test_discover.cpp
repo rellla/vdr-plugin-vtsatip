@@ -61,6 +61,17 @@ static void Units() {
   s.Unassign(0);
   CHECK(s.Assign(3, 0, h, p) && h == "A", "freed frontend is reused (device 3 switches to satellite)");
   CHECK(!s.Provides(2), "no cable");
+  { // busy handling: A (2 sat) and B (1 sat, 1 terr)
+    cVtServers q; int a2[3] = {2, 0, 0}, b2[3] = {1, 1, 0};
+    q.AddManual("A", 554, "A", a2); q.AddManual("B", 554, "B", b2);
+    std::string h2; int p2;
+    CHECK(q.Assign(0, 0, h2, p2) && h2 == "A", "busy test: device 0 on A");
+    CHECK(q.Reassign(0, 0, "A", 554, h2, p2) && h2 == "B", "A answered 503: device 0 moves to B");
+    CHECK(!q.Assign(1, 0, h2, p2) || h2 == "B", "A is skipped while it is marked busy");
+    CHECK(q.Assign(1, 1, h2, p2) && h2 == "B", "other media are not affected by the busy mark");
+    q.Unassign(0); q.Unassign(1);
+    CHECK(!q.Reassign(2, 0, "B", 554, h2, p2) && q.Assign(2, 0, h2, p2) == false, "no alternative: Reassign fails, both busy");
+  }
   CHECK(!s.Remove("A") , "manual servers cannot be removed by UPnP");
   int c[3] = {1, 0, 0};
   CHECK(!s.Update("uuid-x", "B", 554, "dup", "", c, 100) && s.Count() == 2, "UPnP duplicate of a manual server is ignored");

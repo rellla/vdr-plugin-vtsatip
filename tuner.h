@@ -28,6 +28,8 @@ public:
   virtual int  SinkIndex(void) = 0;
   virtual void OnTsData(const uchar *dataP, int lengthP) = 0; // multiple of TS_SIZE
   virtual void OnRetune(void) = 0;                            // flush all buffered data
+  // the server refused the stream with 503 (no free frontend); the sink may pick another server and call SetChannel again
+  virtual void OnServerBusy(const std::string &hostP, int portP) { (void)hostP; (void)portP; }
 };
 
 class cVtTuner;
@@ -81,6 +83,8 @@ private:
   int activePortM;
   std::set<int> activePmtM;
   bool sessionHadPmtM;
+  bool fullPidListM;        // the server does not understand addpids/delpids
+  int failStatusM;          // RTSP status of the last failed tuning
   cTimeMs keepAliveM;
   cVtReceiver receiverM;
   // status (read by other threads)

@@ -26,7 +26,10 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
   patWantedM(false),
   tunedSourceM(0),
   tunedTransponderM(0),
-  tunedSidM(0)
+  tunedSidM(0),
+  lastCiM(0),
+  lastPmtM(0),
+  lastMediumM(-1)
 {
   unsigned int bufsize = (unsigned int)VTSATIP_TSBUFFER_SIZE;
   bufsize -= (bufsize % TS_SIZE);
@@ -128,6 +131,27 @@ void cVtSatipDevice::FeedPat(const uchar *dataP, int lengthP)
          break;
          }
       }
+}
+
+// The server answered 503 (no free frontend, e.g. used by another client): try another server.
+void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
+{
+  cString params;
+  int ci, pmt, medium;
+  {
+    cMutexLock lock(&lastMutexM);
+    params = lastParamsM;
+    ci = lastCiM;
+    pmt = lastPmtM;
+    medium = lastMediumM;
+  }
+  std::string host, name;
+  int port = 0;
+  if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name)) {
+     vtinfo("server %s:%d has no free frontend, device %u moves to %s:%d", hostP.c_str(), portP, indexM, host.c_str(), port);
+     deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str());
+     tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
+     }
 }
 
 void cVtSatipDevice::OnRetune(void)
@@ -372,6 +396,13 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   patWantedM = (ci > 0 && pmt == 0); // learn the PMT PID from the PAT
   channelM = *channelP;
   vtdebug("device %u: '%s' ci=%d pmt=%d", indexM, channelP->Name(), ci, pmt);
+  {
+    cMutexLock lock(&lastMutexM);
+    lastParamsM = params;
+    lastCiM = ci;
+    lastPmtM = pmt;
+    lastMediumM = MediumOfSource(channelP->Source());
+  }
   tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
   return true;
 }
