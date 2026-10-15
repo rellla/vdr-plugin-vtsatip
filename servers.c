@@ -247,3 +247,31 @@ cString cVtServers::Info(void) const
       }
   return s;
 }
+
+std::vector<std::string> cVtServers::InfoLines(void) const
+{
+  std::vector<std::string> lines;
+  cString info = Info();
+  std::string s(*info ? *info : "");
+  size_t pos = 0;
+  while (pos < s.size()) {
+        size_t eol = s.find('\n', pos);
+        if (eol == std::string::npos)
+           eol = s.size();
+        if (eol > pos)
+           lines.push_back(s.substr(pos, eol - pos));
+        pos = eol + 1;
+        }
+  return lines;
+}
+
+void cVtServers::RemoveDiscovered(void)
+{
+  cMutexLock lock(&mutexM);
+  for (size_t i = 0; i < serversM.size();) {
+      if (!serversM[i].manual)
+         serversM.erase(serversM.begin() + i);
+      else
+         ++i;
+      }
+}

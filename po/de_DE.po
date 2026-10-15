@@ -1,0 +1,54 @@
+# VDR plugin language source file.
+# This file is distributed under the same license as the vtsatip package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: vdr-vtsatip 0.4.0\n"
+"Report-Msgid-Bugs-To: <see README>\n"
+"POT-Creation-Date: 2026-10-14 12:00+0200\n"
+"PO-Revision-Date: 2026-10-14 12:00+0200\n"
+"Last-Translator: vtsatip\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "SAT>IP devices (vtuner-ng style)"
+msgstr "SAT>IP-Geräte (wie vtuner-ng)"
+
+msgid "automatic"
+msgstr "automatisch"
+
+msgid "UPnP discovery"
+msgstr "UPnP-Suche"
+
+msgid "Enable EPG scanning"
+msgstr "EPG-Scan erlauben"
+
+msgid "Disconnect idle streams"
+msgstr "Ungenutzte Streams trennen"
+
+msgid "Enable CI extension"
+msgstr "CI-Erweiterung verwenden"
+
+msgid "  VDR device %d: CI slot"
+msgstr "  VDR-Gerät %d: CI-Slot"
+
+msgid "none"
+msgstr "keiner"
+
+msgid "  CA IDs (slot 1;slot 2;...)"
+msgstr "  CA-IDs (Slot 1;Slot 2;...)"
+
+msgid "  Restart stream on CI change"
+msgstr "  Stream bei CI-Wechsel neu starten"
+
+msgid "Tracing"
+msgstr "Protokollierung (Trace)"
+
+msgid "Known SAT>IP servers:"
+msgstr "Bekannte SAT>IP-Server:"
+
+msgid "Invalid CA ID list"
+msgstr "Ungültige CA-ID-Liste"

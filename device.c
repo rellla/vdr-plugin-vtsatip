@@ -278,9 +278,9 @@ bool cVtSatipDevice::HasInternalCam(void)
 bool cVtSatipDevice::ProvidesEIT(void) const
 {
 #if defined(APIVERSNUM) && APIVERSNUM < 20403
-  return true;
+  return VtSatipConfig.eitScan;
 #else
-  return DeviceHooksProvidesEIT();
+  return VtSatipConfig.eitScan && DeviceHooksProvidesEIT();
 #endif
 }
 

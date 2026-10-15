@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "common.h"
 
 bool cVtSatipConfig::ParseCaIds(const char *strP)
@@ -93,4 +94,36 @@ bool cVtSatipConfig::SlotProvidesCa(int slotP, const int *caidsP) const
           if (*id == *ids)
              return true;
   return false;
+}
+
+bool cVtSatipConfig::SetupParse(const char *nameP, const char *valueP)
+{
+  if (!nameP || !valueP)
+     return false;
+  int v = atoi(valueP);
+  if (!strcasecmp(nameP, "EnableCIExtension"))
+     ciExtension = v != 0;
+  else if (!strcasecmp(nameP, "CIRestart"))
+     ciRestart = v != 0;
+  else if (!strcasecmp(nameP, "CAIDs")) {
+     if (!ParseCaIds(valueP))
+        return false;
+     }
+  else if (!strncasecmp(nameP, "CISlotDevice", 12)) {
+     int device = atoi(nameP + 12);
+     if (device < 0 || device >= VTSATIP_MAX_DEVICES || v < 0 || v > VTSATIP_MAX_CI_SLOTS)
+        return false;
+     ciSlot[device] = v;
+     }
+  else if (!strcasecmp(nameP, "Discovery"))
+     discovery = (v < 0) ? -1 : (v ? 1 : 0);
+  else if (!strcasecmp(nameP, "EnableEITScan"))
+     eitScan = v != 0;
+  else if (!strcasecmp(nameP, "DisconnectIdle"))
+     disconnectIdle = v != 0;
+  else if (!strcasecmp(nameP, "Trace"))
+     trace = v ? 1 : 0;
+  else
+     return false;
+  return true;
 }

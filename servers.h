@@ -58,6 +58,8 @@ public:
   bool Assign(int deviceP, int mediumP, std::string &hostP, int &portP, std::string *nameP = NULL);
   void Unassign(int deviceP);
   cString Info(void) const;
+  std::vector<std::string> InfoLines(void) const;
+  void RemoveDiscovered(void);
 };
 
 #endif // __VTSATIP_SERVERS_H

@@ -5,7 +5,7 @@
 # The official name of this plugin (used in -P vtsatip)
 PLUGIN = vtsatip
 
-VERSION = 0.3.0
+VERSION = 0.4.0
 
 ### The directory environment:
 
@@ -55,11 +55,41 @@ all-redirect: all
 
 ### The object files (add further files here):
 
-OBJS = $(PLUGIN).o device.o discover.o param.o pat.o rtsp.o sectionfilter.o servers.o tuner.o vtconfig.o
+OBJS = $(PLUGIN).o device.o discover.o param.o pat.o rtsp.o sectionfilter.o servers.o setup.o tuner.o vtconfig.o
+
+### Internationalization (I18N):
+
+PODIR     = po
+I18Npo    = $(wildcard $(PODIR)/*.po)
+I18Nmo    = $(addsuffix .mo, $(foreach file, $(I18Npo), $(basename $(file))))
+I18Nmsgs  = $(addprefix $(DESTDIR)$(LOCDIR)/, $(addsuffix /LC_MESSAGES/vdr-$(PLUGIN).mo, $(notdir $(foreach file, $(I18Npo), $(basename $(file))))))
+I18Npot   = $(PODIR)/$(PLUGIN).pot
+
+%.mo: %.po
+	@echo MO $@
+	$(Q)msgfmt -c -o $@ $<
+
+$(I18Npot): $(wildcard *.c)
+	@echo GT $@
+	$(Q)xgettext -C -cTRANSLATORS --no-wrap --no-location -k -ktr -ktrNOOP --package-name=vdr-$(PLUGIN) --package-version=$(VERSION) --msgid-bugs-address='<see README>' -o $@ `ls $^`
+
+%.po: $(I18Npot)
+	@echo PO $@
+	$(Q)msgmerge -U --no-wrap --no-location --backup=none -q -N $@ $<
+	@touch $@
+
+$(I18Nmsgs): $(DESTDIR)$(LOCDIR)/%/LC_MESSAGES/vdr-$(PLUGIN).mo: $(PODIR)/%.mo
+	@echo IN $@
+	$(Q)install -D -m644 $< $@
+
+.PHONY: i18n
+i18n: $(I18Nmo) $(I18Npot)
+
+install-i18n: $(I18Nmsgs)
 
 ### The main target:
 
-all: $(SOFILE)
+all: $(SOFILE) i18n
 
 ### Implicit rules:
 
@@ -87,7 +117,7 @@ install-lib: $(SOFILE)
 	@echo IN $(DESTDIR)$(LIBDIR)/$^.$(APIVERSION)
 	$(Q)install -D $^ $(DESTDIR)$(LIBDIR)/$^.$(APIVERSION)
 
-install: install-lib
+install: install-lib install-i18n
 
 dist: clean
 	@-rm -rf $(TMPDIR)/$(ARCHIVE)
@@ -98,4 +128,5 @@ dist: clean
 	@echo Distribution package created as $(PACKAGE).tgz
 
 clean:
+	@-rm -f $(PODIR)/*.mo $(PODIR)/*.pot
 	@-rm -f $(OBJS) $(DEPFILE) *.so *.tgz core* *~

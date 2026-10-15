@@ -55,6 +55,7 @@ struct cVtSatipConfig {
   int portStart;
   int portStop;
   bool disconnectIdle;
+  bool eitScan;                      // let VDR use the devices for EPG scanning
   bool realtime;
   int trace;
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
@@ -68,7 +69,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), eitScan(true),
     realtime(true), trace(0), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
@@ -82,6 +83,8 @@ struct cVtSatipConfig {
   cString CaIdsString(void) const;
   bool ParseCiSlots(const char *strP);   // "1,2,0": CI slot per device
   bool SlotProvidesCa(int slotP, const int *caidsP) const; // slotP: 1..N
+  // settings stored in VDR's setup.conf; returns false for unknown names or invalid values
+  bool SetupParse(const char *nameP, const char *valueP);
   bool UseDiscovery(void) const { return discovery < 0 ? servers.empty() : discovery > 0; }
 };
 

@@ -127,6 +127,30 @@ Server, die das nicht brauchen, kann man mit -Q ohne Neustart betreiben.
 Geräte mit CI übernehmen nur Kanäle, deren CA-IDs der Slot kann; VDR
 nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
 
+Setup-Menü (ab 0.4.0)
+---------------------
+VDR-Setup -> Plugins -> vtsatip. Die Werte stehen in setup.conf und gelten
+sofort, ein Neustart ist nicht nötig. Kommandozeilenoptionen sind die
+Vorgabewerte, gespeicherte Setup-Werte haben Vorrang.
+
+  UPnP-Suche                   automatisch / nein / ja
+                               (automatisch: an, wenn kein -s angegeben ist;
+                               Umschalten startet bzw. stoppt die Suche sofort)
+  EPG-Scan erlauben            die Geräte für VDRs Hintergrund-EPG-Scan nutzen
+  Ungenutzte Streams trennen   Server-Frontend bei Leerlauf freigeben
+  CI-Erweiterung verwenden     zeigt je VDR-Gerät den CI-Slot, die CA-IDs
+                               ("0x1830,0x1843;0x0500") und "Stream bei
+                               CI-Wechsel neu starten"
+  Trace                        RTSP-Verkehr ins Syslog
+  Bekannte SAT>IP-Server       Liste mit belegten/freien Frontends
+
+  Rote Taste "Suchen" startet sofort eine neue UPnP-Suche.
+
+setup.conf-Schlüssel (vtsatip.<Name>): EnableCIExtension, CIRestart, CAIDs,
+CISlotDevice0..n, Discovery (-1/0/1), EnableEITScan, DisconnectIdle, Trace.
+Übersetzungen liegen in po/ (de_DE vorhanden); make erzeugt die .mo-Dateien
+(gettext nötig), make install installiert sie.
+
 Nicht enthalten (bewusst)
 -------------------------
  * "CI TNR"-Erweiterung (herstellerspezifisch, DVBViewer).

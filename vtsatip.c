@@ -15,6 +15,7 @@
 #include "device.h"
 #include "discover.h"
 #include "servers.h"
+#include "setup.h"
 
 #if defined(APIVERSNUM) && APIVERSNUM < 20400
 #error "VDR-2.4.0 API version or greater is required!"
@@ -28,6 +29,7 @@ static const char *VERSION_STR = VTSATIP_VERSION;
 static const char DESCRIPTION[] = trNOOP("SAT>IP devices (vtuner-ng style)");
 
 cVtSatipConfig VtSatipConfig;
+static class cPluginVtSatip *PluginInstance = NULL;
 
 class cPluginVtSatip : public cPlugin {
 private:
@@ -37,8 +39,8 @@ private:
   void ParseFrontends(const char *paramP);
   void ParsePortRange(const char *paramP);
 public:
-  cPluginVtSatip(void) : discoverM(NULL) {}
-  virtual ~cPluginVtSatip() { delete discoverM; }
+  cPluginVtSatip(void) : discoverM(NULL) { PluginInstance = this; }
+  virtual ~cPluginVtSatip() { PluginInstance = NULL; delete discoverM; }
   virtual const char *Version(void) { return VERSION_STR; }
   virtual const char *Description(void) { return tr(DESCRIPTION); }
   virtual const char *CommandLineHelp(void);
@@ -47,6 +49,10 @@ public:
   virtual bool Start(void);
   virtual void Stop(void);
   virtual const char *MainMenuEntry(void) { return NULL; }
+  virtual cMenuSetupPage *SetupMenu(void);
+  virtual bool SetupParse(const char *Name, const char *Value);
+  void RescanServers(void);
+  void ApplySetup(void);
   virtual const char **SVDRPHelpPages(void);
   virtual cString SVDRPCommand(const char *Command, const char *Option, int &ReplyCode);
 };
@@ -309,6 +315,48 @@ void cPluginVtSatip::Stop(void)
   if (discoverM)
      discoverM->Stop();
   cVtSatipDevice::Shutdown();
+}
+
+cMenuSetupPage *cPluginVtSatip::SetupMenu(void)
+{
+  return new cMenuSetupVtSatip;
+}
+
+bool cPluginVtSatip::SetupParse(const char *Name, const char *Value)
+{
+  return VtSatipConfig.SetupParse(Name, Value);
+}
+
+void cPluginVtSatip::RescanServers(void)
+{
+  if (discoverM)
+     discoverM->Rescan();
+}
+
+// called after the setup was stored: start or stop the UPnP discovery
+void cPluginVtSatip::ApplySetup(void)
+{
+  if (VtSatipConfig.UseDiscovery() && !discoverM) {
+     discoverM = new cVtDiscover();
+     discoverM->Start();
+     }
+  else if (!VtSatipConfig.UseDiscovery() && discoverM) {
+     discoverM->Stop();
+     DELETENULL(discoverM);
+     cVtServers::Get()->RemoveDiscovered();
+     }
+}
+
+void VtSatipRescan(void)
+{
+  if (PluginInstance)
+     PluginInstance->RescanServers();
+}
+
+void VtSatipSetupChanged(void)
+{
+  if (PluginInstance)
+     PluginInstance->ApplySetup();
 }
 
 const char **cPluginVtSatip::SVDRPHelpPages(void)
