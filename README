@@ -50,6 +50,8 @@ Aufruf / Umstellung von vtuner-ng
   -c CAIDS         CI-Erweiterung: CA-IDs je CI-Slot des Servers (siehe unten)
   -i LISTE         CI-Slot (1..4) je VDR-Gerät, 0 = keiner, z. B. -i 1,0
   -Q               Stream bei Änderung des CI-Zustands NICHT neu starten
+  -T MODUS         unicast (Standard) oder multicast
+  -b ADRESSE       lokale Schnittstelle (IP) für Multicast-Beitritt
   -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
   -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
   -N               Stream bei Leerlauf nicht abbauen
@@ -126,6 +128,24 @@ mit x_pmt gestartet wurden, und ihn nur beim Abbau der Session freigeben.
 Server, die das nicht brauchen, kann man mit -Q ohne Neustart betreiben.
 Geräte mit CI übernehmen nur Kanäle, deren CA-IDs der Slot kann; VDR
 nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
+
+Multicast (ab 0.5.0)
+--------------------
+  vdr -P 'vtsatip -d 4 -T multicast -b 192.168.1.10'
+
+Das Plugin sendet im SETUP "Transport: RTP/AVP;multicast" ohne Ziel, der Server
+antwortet mit Gruppe, Port, TTL und optional Quelle (SSM). Das Plugin tritt der
+Gruppe bei (IGMP), liest RTP und RTCP von dort und gibt sie beim Abbau wieder
+frei. Steuerung (PLAY, addpids/delpids, Keepalive) läuft unverändert über RTSP.
+
+Bietet ein Server kein Multicast an oder lehnt es ab (z. B. 461), nimmt das
+Plugin automatisch Unicast und merkt sich das für diesen Server.
+
+Vorteil: mehrere Clients können denselben Transponder empfangen, ohne dass der
+Server mehrfach sendet. Voraussetzung: IGMP-Snooping im Switch, sonst wird das
+gesamte Netz (vor allem WLAN) mit dem Stream geflutet. -b ist nötig, wenn der
+Rechner mehrere Netzwerkschnittstellen hat. Im Setup-Menü: "Übertragungsart".
+Die Einstellung gilt für neue Sessions.
 
 Server-Eigenheiten (Quirks)
 ---------------------------

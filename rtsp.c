@@ -50,6 +50,7 @@ void cVtRtsp::Close(void)
   streamIdM = -1;
   timeoutS = 30;
   lastStatusM = 0;
+  transportM = cVtTransport();
 }
 
 bool cVtRtsp::WaitFd(short eventsP, int timeoutMsP)
@@ -228,12 +229,47 @@ bool cVtRtsp::Options(void)
   return Transact(req, 3000);
 }
 
-bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP)
+// Transport: RTP/AVP;multicast;destination=239.0.1.2;port=5004-5005;ttl=2[;source=10.0.0.1]
+static void ParseTransport(const char *valueP, cVtTransport &tP)
+{
+  tP = cVtTransport();
+  std::string line(valueP, strcspn(valueP, "\r\n"));
+  size_t pos = 0;
+  while (pos <= line.size()) {
+        size_t semi = line.find(';', pos);
+        std::string tok = line.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+        if (tok == "multicast")
+           tP.multicast = true;
+        else if (!strncasecmp(tok.c_str(), "destination=", 12))
+           tP.destination = tok.substr(12);
+        else if (!strncasecmp(tok.c_str(), "source=", 7))
+           tP.source = tok.substr(7);
+        else if (!strncasecmp(tok.c_str(), "port=", 5)) {
+           int a = 0, b = 0;
+           if (sscanf(tok.c_str() + 5, "%d-%d", &a, &b) >= 1) {
+              tP.rtpPort = a;
+              tP.rtcpPort = b ? b : a + 1;
+              }
+           }
+        if (semi == std::string::npos)
+           break;
+        pos = semi + 1;
+        }
+  if (tP.multicast && tP.destination.empty())
+     tP.multicast = false; // not usable without a group
+}
+
+bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP, int modeP)
 {
   char req[1536];
+  char transport[96];
+  if (modeP == VTSATIP_TRANSPORT_MULTICAST)
+     snprintf(transport, sizeof(transport), "RTP/AVP;multicast");
+  else
+     snprintf(transport, sizeof(transport), "RTP/AVP;unicast;client_port=%d-%d", rtpPortP, rtcpPortP);
   int n = snprintf(req, sizeof(req), "SETUP rtsp://%s/?%s RTSP/1.0\r\nCSeq: %d\r\n"
-                   "Transport: RTP/AVP;unicast;client_port=%d-%d\r\n\r\n",
-                   *HostPart(*hostM, portM), queryP, cseqM++, rtpPortP, rtcpPortP);
+                   "Transport: %s\r\n\r\n",
+                   *HostPart(*hostM, portM), queryP, cseqM++, transport);
   if (n <= 0 || n >= (int)sizeof(req))
      return false;
   if (!Transact(req, 5000))
@@ -264,7 +300,12 @@ bool cVtRtsp::Setup(const char *queryP, int rtpPortP, int rtcpPortP)
         timeoutS = t;
      }
   streamIdM = id;
-  vtdebug("RTSP: stream=%d session=%s timeout=%d", streamIdM, sessionM, timeoutS);
+  const char *tr = Header("Transport");
+  if (tr)
+     ParseTransport(tr, transportM);
+  else
+     transportM = cVtTransport();
+  vtdebug("RTSP: stream=%d session=%s timeout=%d%s", streamIdM, sessionM, timeoutS, transportM.multicast ? " multicast" : "");
   return true;
 }
 

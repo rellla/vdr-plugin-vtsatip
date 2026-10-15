@@ -28,10 +28,10 @@ for t in tuner ci; do
   wait $SRV 2>/dev/null
 done
 # server quirks, handled by generic fallbacks
-for mode in zeros nodelta notune busy; do
+for mode in zeros nodelta notune busy mcast nomcast refusemcast; do
   PORT=$((20000 + RANDOM % 10000)); PORT2=$((PORT + 1))
   rm -f "$OUT/server.log"
-  python3 fake_satip.py $PORT "$OUT/server.log" 30 $mode & SRV=$!
+  FAKE_MCAST_PORT=$((PORT + 100)) python3 fake_satip.py $PORT "$OUT/server.log" 30 $mode & SRV=$!
   OK=""
   if [ $mode = busy ]; then python3 fake_satip.py $PORT2 "$OUT/server2.log" 30 & OK=$!; fi
   sleep 0.5

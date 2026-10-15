@@ -52,3 +52,12 @@ msgstr "Bekannte SAT>IP-Server:"
 
 msgid "Invalid CA ID list"
 msgstr "Ungültige CA-ID-Liste"
+
+msgid "unicast"
+msgstr "Unicast"
+
+msgid "multicast"
+msgstr "Multicast"
+
+msgid "Transport mode"
+msgstr "Übertragungsart"

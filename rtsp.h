@@ -7,7 +7,18 @@
 #ifndef __VTSATIP_RTSP_H
 #define __VTSATIP_RTSP_H
 
+#include <string>
 #include "common.h"
+
+// what the server answered to SETUP
+struct cVtTransport {
+  bool multicast;
+  std::string destination;   // multicast group
+  std::string source;        // optional multicast source (SSM)
+  int rtpPort;
+  int rtcpPort;
+  cVtTransport(void) : multicast(false), rtpPort(0), rtcpPort(0) {}
+};
 
 class cVtRtsp {
 private:
@@ -20,6 +31,7 @@ private:
   int streamIdM;
   int timeoutS;
   int lastStatusM;
+  cVtTransport transportM;
   char rxM[eMaxResponse + 1];
 
   bool Send(const char *requestP);
@@ -40,7 +52,9 @@ public:
   int LastStatus(void) const { return lastStatusM; }
   bool Options(void);
   // query: the part after '?' (without '?')
-  bool Setup(const char *queryP, int rtpPortP, int rtcpPortP);
+  // modeP: VTSATIP_TRANSPORT_UNICAST or _MULTICAST; what the server really chose is in Transport()
+  bool Setup(const char *queryP, int rtpPortP, int rtcpPortP, int modeP = VTSATIP_TRANSPORT_UNICAST);
+  const cVtTransport &Transport(void) const { return transportM; }
   bool PlayOnce(const char *queryP);
   bool Play(const char *queryP);
   bool Teardown(void);

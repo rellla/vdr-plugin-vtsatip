@@ -39,6 +39,9 @@ static const int VtSatipStdPids[] = { 0, 16, 17, 18, 19, 20 };
 enum { VTSATIP_MEDIUM_SAT = 0, VTSATIP_MEDIUM_TERR = 1, VTSATIP_MEDIUM_CABLE = 2, VTSATIP_MEDIUM_COUNT = 3 };
 #define VTSATIP_UNLIMITED 99
 
+// how the stream is delivered
+enum { VTSATIP_TRANSPORT_UNICAST = 0, VTSATIP_TRANSPORT_MULTICAST = 1, VTSATIP_TRANSPORT_TCP = 2 };
+
 struct cVtManualServer {
   std::string host;
   int port;
@@ -56,6 +59,8 @@ struct cVtSatipConfig {
   int portStop;
   bool disconnectIdle;
   bool eitScan;                      // let VDR use the devices for EPG scanning
+  int transport;                     // VTSATIP_TRANSPORT_*
+  std::string mcastInterface;        // address of the local interface used for multicast, empty = system choice
   bool realtime;
   int trace;
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
@@ -69,7 +74,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), eitScan(true),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)

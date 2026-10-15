@@ -78,6 +78,11 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "                           CI slot (1..4) used by each device, 0 = none, e.g. -i 1,0\n"
          "  -Q,       --noci-restart do not restart a stream when its CI state changes\n"
          "                           (default: restart, needed by e.g. Digital Devices OctopusNet)\n"
+         "  -T MODE,  --transport=MODE\n"
+         "                           how the stream is delivered: unicast (default) or multicast;\n"
+         "                           multicast needs IGMP snooping in the switch and falls back to\n"
+         "                           unicast for servers which do not offer it\n"
+         "  -b ADDR,  --bind=ADDR    address of the local network interface used to join multicast groups\n"
          "  -p START-END, --portrange=START-END\n"
          "                           RTP/RTCP port range (default 45000-47000)\n"
          "  -r SIZE,  --rcvbuf=SIZE  RTP socket receive buffer in bytes (default 2097152)\n"
@@ -191,6 +196,8 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "caids",        required_argument, NULL, 'c' },
     { "ciassign",     required_argument, NULL, 'i' },
     { "noci-restart", no_argument,       NULL, 'Q' },
+    { "transport",    required_argument, NULL, 'T' },
+    { "bind",         required_argument, NULL, 'b' },
     { "portrange",    required_argument, NULL, 'p' },
     { "rcvbuf",       required_argument, NULL, 'r' },
     { "nodisconnect", no_argument,       NULL, 'N' },
@@ -199,7 +206,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:Qp:r:NRt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:QT:b:p:r:NRt:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -242,6 +249,19 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                break;
           case 'Q':
                VtSatipConfig.ciRestart = false;
+               break;
+          case 'T':
+               if (!strcasecmp(optarg, "unicast"))
+                  VtSatipConfig.transport = VTSATIP_TRANSPORT_UNICAST;
+               else if (!strcasecmp(optarg, "multicast"))
+                  VtSatipConfig.transport = VTSATIP_TRANSPORT_MULTICAST;
+               else {
+                  fprintf(stderr, "vtsatip: invalid transport '%s' (unicast or multicast)\n", optarg);
+                  return false;
+                  }
+               break;
+          case 'b':
+               VtSatipConfig.mcastInterface = optarg;
                break;
           case 'p':
                ParsePortRange(optarg);

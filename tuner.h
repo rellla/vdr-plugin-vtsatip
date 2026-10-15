@@ -37,9 +37,19 @@ class cVtTuner;
 class cVtReceiver : public cThread {
 private:
   cVtTuner &tunerM;
+  cMutex sockMutexM;         // protects the sockets, they are replaced when a stream goes multicast
+  std::atomic<int> changersM; // threads waiting to replace the sockets; the receive loop lets them go first
+  class cChangeLock {
+    cVtReceiver &rM;
+  public:
+    explicit cChangeLock(cVtReceiver &rP) : rM(rP) { ++rM.changersM; rM.sockMutexM.Lock(); --rM.changersM; }
+    ~cChangeLock() { rM.sockMutexM.Unlock(); }
+  };
   int rtpFdM;
   int rtcpFdM;
-  int rtpPortM;
+  std::atomic<int> rtpPortM;
+  bool multicastM;
+  void CloseSocketsLocked(void);
   void ProcessRtp(const uchar *bufP, int lenP);
   void ProcessRtcp(const uchar *bufP, int lenP);
 protected:
@@ -47,7 +57,11 @@ protected:
 public:
   explicit cVtReceiver(cVtTuner &tunerP);
   virtual ~cVtReceiver();
-  bool Open(void);
+  bool Open(void);                       // unicast sockets on a free port pair
+  // join the multicast group of the stream (source = SSM source or empty)
+  bool OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP);
+  void ResetUnicast(void) { Open(); }
+  bool IsMulticast(void) const { return multicastM; }
   void Stop(void);
   int RtpPort(void) const { return rtpPortM; }
   int RtcpPort(void) const { return rtpPortM + 1; }
@@ -84,6 +98,8 @@ private:
   std::set<int> activePmtM;
   bool sessionHadPmtM;
   bool fullPidListM;        // the server does not understand addpids/delpids
+  bool multicastActiveM;    // the current session delivers its stream by multicast
+  std::set<std::string> noMulticastM; // servers (host:port) which refused multicast
   int failStatusM;          // RTSP status of the last failed tuning
   cTimeMs keepAliveM;
   cVtReceiver receiverM;
@@ -100,6 +116,7 @@ private:
   std::set<int> WantedPids(void);     // with standard PIDs, mutexM must be held
   static std::string JoinPids(const std::set<int> &pidsP);
   static std::string CiParams(const std::set<int> &pmtP, int ciSlotP);
+  bool OpenSession(const std::string &hostP, int portP, const std::string &paramsP, const std::set<int> &pmtP, int ciSlotP);
   bool DoTune(const std::string &paramsP, const std::set<int> &pidsP, const std::set<int> &pmtP, int ciSlotP,
               const std::string &hostP, int portP);
   bool DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP);

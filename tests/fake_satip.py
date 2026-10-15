@@ -5,7 +5,8 @@ import socket, threading, time, struct, sys, re, os, signal
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8554
 LOG = sys.argv[2] if len(sys.argv) > 2 else "server.log"
 TIMEOUT = int(sys.argv[3]) if len(sys.argv) > 3 else 30
-FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy
+FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast
+MCAST_GROUP, MCAST_PORT = "239.255.77.7", int(os.environ.get("FAKE_MCAST_PORT", "5004"))
 lock = threading.Lock()
 
 def log(msg):
@@ -22,6 +23,7 @@ class Stream:
         self.seq = 0
         self.cc = {}
         self.started = False
+        self.mcast = False
 
     def packets(self):
         out = b""
@@ -35,7 +37,7 @@ def sender(st, sock):
     last_rtcp = 0
     while st.alive:
         time.sleep(0.005)
-        if not st.started or not st.client or not st.pids or not st.freq:
+        if not st.started or not (st.client or st.mcast) or not st.pids or not st.freq:
             continue
         data = st.packets()
         # at most 7 TS packets per datagram
@@ -43,7 +45,7 @@ def sender(st, sock):
             chunk = data[i:i + 188 * 7]
             st.seq = (st.seq + 1) & 0xffff
             hdr = struct.pack(">BBHII", 0x80, 33, st.seq, int(time.time() * 90000) & 0xffffffff, 1)
-            sock.sendto(hdr + chunk, (st.client[0], st.client[1]))
+            sock.sendto(hdr + chunk, (MCAST_GROUP, MCAST_PORT) if st.mcast else (st.client[0], st.client[1]))
         if time.time() - last_rtcp > 0.3:
             last_rtcp = time.time()
             s = b"ver=1.0;src=1;tuner=1,224,1,15,%d,h,dvbs2,8psk,off,0.35,22000,23;pids=0" % st.freq
@@ -53,11 +55,13 @@ def sender(st, sock):
             # length field = words - 1 including header
             words = (len(pkt)) // 4
             pkt = struct.pack(">BBHI", 0x80, 204, words - 1, 1) + body
-            sock.sendto(pkt, (st.client[0], st.client[1] + 1))
+            sock.sendto(pkt, (MCAST_GROUP, MCAST_PORT + 1) if st.mcast else (st.client[0], st.client[1] + 1))
 
 def handle(conn, addr):
     st = Stream()
     usock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
+    usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)
     t = threading.Thread(target=sender, args=(st, usock), daemon=True)
     t.start()
     buf = b""
@@ -93,10 +97,19 @@ def handle(conn, addr):
                     refuse(454, "Session Not Found")
                     continue
                 if method == "SETUP":
+                    want_mc = "multicast" in hdrs.get("transport", "")
+                    if want_mc and "refusemcast" in FLAGS:
+                        refuse(461, "Unsupported Transport")
+                        continue
                     m = re.search(r"client_port=(\d+)-(\d+)", hdrs.get("transport", ""))
-                    st.client = (addr[0], int(m.group(1)))
+                    st.client = (addr[0], int(m.group(1))) if m else None
+                    st.mcast = want_mc and "nomcast" not in FLAGS
                     st.freq = int(q.get("freq", "0"))
                     extra = "Session: %s;timeout=%d\r\ncom.ses.streamID: 7\r\n" % ("00ABCD1234" if "zeros" in FLAGS else "ABCD1234", TIMEOUT)
+                    if st.mcast:
+                        extra += "Transport: RTP/AVP;multicast;destination=%s;port=%d-%d;ttl=2\r\n" % (MCAST_GROUP, MCAST_PORT, MCAST_PORT + 1)
+                    elif want_mc:
+                        extra += "Transport: RTP/AVP;unicast;server_port=5000-5001\r\n"
                 elif method == "PLAY":
                     if "addpids" in q and "999" in q["addpids"].split(","):
                         log("DROP connection (simulated failure)")

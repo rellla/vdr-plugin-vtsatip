@@ -22,9 +22,11 @@
 cVtReceiver::cVtReceiver(cVtTuner &tunerP)
 : cThread("vtsatip rtp"),
   tunerM(tunerP),
+  changersM(0),
   rtpFdM(-1),
   rtcpFdM(-1),
-  rtpPortM(-1)
+  rtpPortM(-1),
+  multicastM(false)
 {
 }
 
@@ -33,8 +35,20 @@ cVtReceiver::~cVtReceiver()
   Stop();
 }
 
+void cVtReceiver::CloseSocketsLocked(void)
+{
+  if (rtpFdM >= 0)
+     close(rtpFdM);
+  if (rtcpFdM >= 0)
+     close(rtcpFdM);
+  rtpFdM = rtcpFdM = -1;
+  multicastM = false;
+}
+
 bool cVtReceiver::Open(void)
 {
+  cChangeLock lock(*this);
+  CloseSocketsLocked();
   int start, stop;
   if (VtSatipConfig.portStart > 0 && VtSatipConfig.portStop > VtSatipConfig.portStart) {
      start = VtSatipConfig.portStart;
@@ -84,18 +98,75 @@ bool cVtReceiver::Open(void)
   return false;
 }
 
+bool cVtReceiver::OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP)
+{
+  cChangeLock lock(*this);
+  CloseSocketsLocked();
+  struct in_addr group, source, iface;
+  bool ok = inet_pton(AF_INET, groupP.c_str(), &group) == 1 && IN_MULTICAST(ntohl(group.s_addr)) && rtpPortP > 0 && rtcpPortP > 0;
+  bool ssm = !sourceP.empty() && inet_pton(AF_INET, sourceP.c_str(), &source) == 1;
+  iface.s_addr = htonl(INADDR_ANY);
+  if (!VtSatipConfig.mcastInterface.empty() && inet_pton(AF_INET, VtSatipConfig.mcastInterface.c_str(), &iface) != 1)
+     iface.s_addr = htonl(INADDR_ANY);
+  int fds[2] = { -1, -1 };
+  int ports[2] = { rtpPortP, rtcpPortP };
+  for (int i = 0; ok && i < 2; ++i) {
+      fds[i] = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
+      if (fds[i] < 0) {
+         ok = false;
+         break;
+         }
+      int one = 1;
+      setsockopt(fds[i], SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+#ifdef SO_REUSEPORT
+      setsockopt(fds[i], SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one));
+#endif
+      int zero = 0; // only the groups joined by this socket, not those of other sockets of the host
+      setsockopt(fds[i], IPPROTO_IP, IP_MULTICAST_ALL, &zero, sizeof(zero));
+      struct sockaddr_in a;
+      memset(&a, 0, sizeof(a));
+      a.sin_family = AF_INET;
+      a.sin_addr = group; // binding to the group address filters other streams on the same port
+      a.sin_port = htons(ports[i]);
+      ok = bind(fds[i], (struct sockaddr *)&a, sizeof(a)) == 0;
+      if (ok) {
+         if (ssm) {
+            struct ip_mreq_source m;
+            m.imr_multiaddr = group;
+            m.imr_interface = iface;
+            m.imr_sourceaddr = source;
+            ok = setsockopt(fds[i], IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, &m, sizeof(m)) == 0;
+            }
+         else {
+            struct ip_mreq m;
+            m.imr_multiaddr = group;
+            m.imr_interface = iface;
+            ok = setsockopt(fds[i], IPPROTO_IP, IP_ADD_MEMBERSHIP, &m, sizeof(m)) == 0;
+            }
+         }
+      }
+  if (!ok) {
+     vterror("cannot join the multicast group %s port %d: %s", groupP.c_str(), rtpPortP, strerror(errno));
+     for (int i = 0; i < 2; ++i)
+         if (fds[i] >= 0)
+            close(fds[i]);
+     return false;
+     }
+  int size = VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : 2 * 1024 * 1024;
+  setsockopt(fds[0], SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+  rtpFdM = fds[0];
+  rtcpFdM = fds[1];
+  rtpPortM = rtpPortP;
+  multicastM = true;
+  return true;
+}
+
 void cVtReceiver::Stop(void)
 {
   if (Running())
      Cancel(3);
-  if (rtpFdM >= 0) {
-     close(rtpFdM);
-     rtpFdM = -1;
-     }
-  if (rtcpFdM >= 0) {
-     close(rtcpFdM);
-     rtcpFdM = -1;
-     }
+  cChangeLock lock(*this);
+  CloseSocketsLocked();
 }
 
 void cVtReceiver::ProcessRtp(const uchar *bufP, int lenP)
@@ -160,6 +231,12 @@ void cVtReceiver::Action(void)
      }
   uchar buf[4096];
   while (Running()) {
+        sockMutexM.Lock(); // sockets are replaced under this mutex (unicast <-> multicast)
+        if (rtpFdM < 0 || rtcpFdM < 0) {
+           sockMutexM.Unlock();
+           cCondWait::SleepMs(20);
+           continue;
+           }
         struct pollfd fds[2];
         fds[0].fd = rtpFdM;
         fds[0].events = POLLIN;
@@ -167,23 +244,27 @@ void cVtReceiver::Action(void)
         fds[1].fd = rtcpFdM;
         fds[1].events = POLLIN;
         fds[1].revents = 0;
-        int r = poll(fds, 2, 200);
-        if (r <= 0)
-           continue;
-        if (fds[0].revents & POLLIN) {
-           // drain the socket completely, this keeps the latency low
-           for (int i = 0; i < 256; ++i) {
-               ssize_t n = recv(rtpFdM, buf, sizeof(buf), MSG_DONTWAIT);
-               if (n <= 0)
-                  break;
-               ProcessRtp(buf, (int)n);
-               }
+        int r = poll(fds, 2, 50);
+        if (r > 0) {
+           if (fds[0].revents & POLLIN) {
+              // drain the socket completely, this keeps the latency low
+              for (int i = 0; i < 256; ++i) {
+                  ssize_t n = recv(rtpFdM, buf, sizeof(buf), MSG_DONTWAIT);
+                  if (n <= 0)
+                     break;
+                  ProcessRtp(buf, (int)n);
+                  }
+              }
+           if (fds[1].revents & POLLIN) {
+              ssize_t n = recv(rtcpFdM, buf, sizeof(buf), MSG_DONTWAIT);
+              if (n > 0)
+                 ProcessRtcp(buf, (int)n);
+              }
            }
-        if (fds[1].revents & POLLIN) {
-           ssize_t n = recv(rtcpFdM, buf, sizeof(buf), MSG_DONTWAIT);
-           if (n > 0)
-              ProcessRtcp(buf, (int)n);
-           }
+        sockMutexM.Unlock();
+        // a mutex is not fair: give a thread which wants to replace the sockets time to get it
+        for (int i = 0; i < 200 && changersM.load() > 0; ++i)
+            cCondWait::SleepMs(1);
         }
 }
 
@@ -201,6 +282,7 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   activePortM(0),
   sessionHadPmtM(false),
   fullPidListM(false),
+  multicastActiveM(false),
   failStatusM(0),
   keepAliveM(),
   receiverM(*this),
@@ -340,6 +422,10 @@ void cVtTuner::DropSession(void)
   activePmtM.clear();
   sessionHadPmtM = false;
   fullPidListM = false;
+  if (multicastActiveM) {
+     receiverM.ResetUnicast(); // leave the group
+     multicastActiveM = false;
+     }
   activeParamsM.clear();
   activeHostM.clear();
   strengthM = qualityM = -1;
@@ -409,6 +495,59 @@ std::string cVtTuner::CiParams(const std::set<int> &pmtP, int ciSlotP)
   return "&x_pmt=" + JoinPids(pmtP) + "&x_ci=" + std::to_string(ciSlotP);
 }
 
+// connects and sets the session up; multicast is requested if configured and falls back to unicast
+// (per server) when the server does not offer it
+bool cVtTuner::OpenSession(const std::string &hostP, int portP, const std::string &paramsP, const std::set<int> &pmtP, int ciSlotP)
+{
+  DropSession();
+  std::string key = hostP + ":" + std::to_string(portP);
+  std::string query = paramsP + "&pids=none" + CiParams(pmtP, ciSlotP);
+  int modes[2];
+  int n = 0;
+  if (VtSatipConfig.transport == VTSATIP_TRANSPORT_MULTICAST && !noMulticastM.count(key))
+     modes[n++] = VTSATIP_TRANSPORT_MULTICAST;
+  modes[n++] = VTSATIP_TRANSPORT_UNICAST;
+  for (int i = 0; i < n; ++i) {
+      if (!rtspM.IsOpen()) {
+         if (!rtspM.Connect(hostP.c_str(), portP))
+            return false;
+         if (!rtspM.Options()) {
+            failStatusM = rtspM.LastStatus();
+            DropSession();
+            return false;
+            }
+         }
+      bool ok = rtspM.Setup(query.c_str(), receiverM.RtpPort(), receiverM.RtcpPort(), modes[i]);
+      if (ok && modes[i] == VTSATIP_TRANSPORT_MULTICAST) {
+         const cVtTransport &tr = rtspM.Transport();
+         if (tr.multicast && receiverM.OpenMulticast(tr.destination, tr.source, tr.rtpPort, tr.rtcpPort))
+            multicastActiveM = true;
+         else {
+            // the server gave no usable group: close this session and start again with unicast
+            ok = false;
+            if (rtspM.HasSession())
+               rtspM.Teardown();
+            rtspM.Close();
+            noMulticastM.insert(key);
+            vtinfo("device %d: server %s offers no multicast, using unicast", indexM, key.c_str());
+            continue;
+            }
+         }
+      if (ok) {
+         sessionUpM = true;
+         sessionHadPmtM = !pmtP.empty();
+         return true;
+         }
+      failStatusM = rtspM.LastStatus();
+      if (modes[i] == VTSATIP_TRANSPORT_UNICAST || failStatusM == 503 || failStatusM == 0)
+         break;
+      noMulticastM.insert(key); // e.g. 461 unsupported transport
+      vtinfo("device %d: server %s refused multicast (status %d), using unicast", indexM, key.c_str(), failStatusM);
+      }
+  DropSession();
+  return false;
+}
+
 bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, const std::set<int> &pmtP, int ciSlotP,
                       const std::string &hostP, int portP)
 {
@@ -452,17 +591,8 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
   for (int attempt = 0; ; ++attempt) {
       bool fresh = false;
       if (!rtspM.HasSession()) {
-         DropSession();
-         if (!rtspM.Connect(host.c_str(), port))
+         if (!OpenSession(host, port, params, pmtP, ciSlotP))
             return false;
-         if (!rtspM.Options() ||
-             !rtspM.Setup((params + "&pids=none" + CiParams(pmtP, ciSlotP)).c_str(), receiverM.RtpPort(), receiverM.RtcpPort())) {
-            failStatusM = rtspM.LastStatus();
-            DropSession();
-            return false;
-            }
-         sessionUpM = true;
-         sessionHadPmtM = !pmtP.empty();
          fresh = true;
          }
       vtdebug("device %d: tune %s", indexM, query.c_str());

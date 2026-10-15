@@ -20,6 +20,8 @@ private:
   int eitScanM;
   int disconnectIdleM;
   int traceM;
+  int transportM;       // VTSATIP_TRANSPORT_*
+  const char *transportTextsM[2];
   int ciSlotM[VTSATIP_MAX_DEVICES];
   char caIdsM[128];
   const char *discoveryTextsM[3];

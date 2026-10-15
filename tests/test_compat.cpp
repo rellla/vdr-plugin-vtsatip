@@ -33,8 +33,38 @@ int main(int argc, char **argv) {
   // argv: <mode> <port> [port2]   modes: zeros nodelta notune busy
   std::string mode = argv[1]; int port = atoi(argv[2]);
   VtSatipConfig.host = "127.0.0.1"; VtSatipConfig.port = port; VtSatipConfig.realtime = false;
+  if (mode == "mcast" || mode == "nomcast" || mode == "refusemcast") {
+    VtSatipConfig.transport = VTSATIP_TRANSPORT_MULTICAST;
+    VtSatipConfig.mcastInterface = "127.0.0.1";
+  }
   Sink sink; cVtTuner t(sink);
-  if (mode == "zeros") {
+  if (mode == "mcast") {
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "stream received through the multicast group");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 1, "one SETUP (no fallback)");
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return sink.HasPid(100); }, 3000), "PID changes work in a multicast session");
+    CHECK(WaitFor([&]{ return t.SignalQuality() == 100; }, 2000), "RTCP arrives on the multicast RTCP port");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune inside the multicast session");
+    t.Release();
+    usleep(300000);
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 4000), "new multicast session after release");
+  }
+  else if (mode == "nomcast" || mode == "refusemcast") {
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 11493; }, 5000), "falls back to unicast");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 2, "second SETUP is the unicast one");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune works");
+    t.Release();
+    usleep(300000);
+    t.SetChannel(TP1);
+    CHECK(WaitFor([&]{ return t.HasLock(); }, 4000), "server is remembered as unicast-only");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 3, "no further multicast attempt after release");
+  }
+  else if (mode == "zeros") {
     t.SetChannel(TP1);
     CHECK(WaitFor([&]{ return t.HasLock(); }, 4000), "lock although the server dislikes session ids with leading zeros");
     CHECK(LogText("server.log").find("REFUSED PLAY 454") != std::string::npos, "the first PLAY was refused (454)");
