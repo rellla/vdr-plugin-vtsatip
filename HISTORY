@@ -1,6 +1,14 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-15: Version 0.7.0
+- Fixed server frontend per device in the setup menu.
+- pids=all option (-a, setup menu): request the whole transponder.
+- RTP packet counters (received, lost, reordered) in SVDRP INFO.
+- Statistics page in the setup menu.
+- README in English (README.de is the German version), translation check
+  in the test suite.
+
 2026-10-15: Version 0.6.0
 - RTP over TCP (-T tcp, setup menu): RTP/RTCP interleaved into the RTSP
   connection ("$" frames), automatic fallback to UDP per server.
