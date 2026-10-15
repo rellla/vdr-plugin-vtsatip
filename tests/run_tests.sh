@@ -15,6 +15,7 @@ build test_tuner test_tuner.cpp $SRC
 build test_ci test_ci.cpp $SRC
 build test_discover test_discover.cpp $SRC
 build test_compat test_compat.cpp $SRC
+echo "### translations"; python3 check_po.py || fail=1
 echo "### config";   "$OUT/test_cfg" || fail=1
 echo "### sections"; "$OUT/test_sec" || fail=1
 for t in tuner ci; do

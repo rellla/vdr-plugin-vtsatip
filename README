@@ -1,252 +1,280 @@
-vtsatip - SAT>IP-Plugin für VDR mit dem Verhalten von vtuner-ng
+vtsatip - SAT>IP plugin for VDR with the behaviour of vtuner-ng
 ================================================================
 
-Was ist das?
-------------
-Ein VDR-Plugin, das den SAT>IP-Client aus vtuner-ng (Daemon "satip") direkt in
-VDR einbaut. Das Kernelmodul vtunerc und der Userspace-Daemon entfallen, nach
-einem Kernelupdate muss nichts mehr neu kompiliert werden.
+(Deutsche Version: README.de)
 
-Das Plugin wurde bewusst NICHT als Abwandlung des Plugins von FireFlyVDR
-gebaut, sondern nach dem Ablauf von vtuner-ng (die Aufteilung in Geräte,
-Tuner, Section-Filter usw. und die Parameter-Abbildung channels.conf ->
-SAT>IP-URL stammen aus dem satip-Plugin, GPLv2):
+What is it?
+-----------
+A VDR plugin which builds the SAT>IP client of vtuner-ng (the "satip" daemon)
+directly into VDR. The vtunerc kernel module and the userspace daemon are no
+longer needed; nothing has to be recompiled after a kernel update.
 
- * Eine dauerhafte RTSP-Session pro Gerät. Nur das erste Tuning macht
-   OPTIONS + SETUP (pids=none) + PLAY. Jeder weitere Kanalwechsel auf einen
-   anderen Transponder ist genau ein PLAY mit Tuningparametern und kompletter
-   PID-Liste.
- * Gleicher Transponder: kein RTSP-Verkehr, der Lock bleibt erhalten.
- * PID-Änderungen gehen sofort als addpids/delpids raus (kein 250-ms-Timer).
- * PIDs 0,16,17,18,19,20 (PAT, NIT, SDT, EIT, ...) werden immer angefordert.
- * "Lock" gilt, sobald das erste echte TS-Paket eintrifft (wie im Kernelmodul),
-   es wird nicht auf RTCP/DESCRIBE gewartet.
- * SetChannelDevice() kehrt sofort zurück, es wird nicht auf den Tuner gewartet.
- * Pakete, die während eines Retunes noch vom alten Transponder eintreffen,
-   werden verworfen; beim Retune werden die Puffer geleert.
- * RTP-Empfang in eigenem Thread, der Socket wird komplett leergelesen,
-   Versuch auf SCHED_FIFO (niedrigste Echtzeitpriorität) wie im vtuner-Daemon.
- * Session-Keepalive per OPTIONS, nach Fehlern baut sich der Tuner selbst neu auf.
+The plugin is deliberately NOT a variation of the plugin by FireFlyVDR but
+follows the control flow of vtuner-ng (the split into devices, tuner, section
+filter etc. and the mapping channels.conf -> SAT>IP URL come from the satip
+plugin, GPLv2):
+
+ * One persistent RTSP session per device. Only the first tuning does
+   OPTIONS + SETUP (pids=none) + PLAY. Every further switch to another
+   transponder is exactly one PLAY with the tuning parameters and the
+   complete PID list.
+ * Same transponder: no RTSP traffic at all, the lock is kept.
+ * PID changes are sent immediately as addpids/delpids (no 250 ms timer).
+ * PIDs 0,16,17,18,19,20 (PAT, NIT, SDT, EIT, ...) are always requested.
+ * "Lock" is declared as soon as the first real TS packet arrives (like in
+   the kernel module); the plugin does not wait for RTCP or DESCRIBE.
+ * SetChannelDevice() returns immediately, it does not wait for the tuner.
+ * Packets of the old transponder which arrive during a retune are dropped,
+   the buffers are flushed.
+ * RTP is received in a thread of its own, the socket is drained completely,
+   SCHED_FIFO (lowest realtime priority) is tried like in the vtuner daemon.
+ * Session keep-alive with OPTIONS; the tuner rebuilds itself after errors.
 
 Installation
 ------------
-  cd VDR-Quellverzeichnis/PLUGINS/src
-  tar xzf vdr-vtsatip-0.1.0.tgz ; ln -s vtsatip-0.1.0 vtsatip
-  cd ../.. && make plugins && make install-plugins     (bzw. make install-lib im Plugin)
+  cd VDR-source-directory/PLUGINS/src
+  tar xzf vdr-vtsatip-<version>.tar.gz ; ln -s vdr-plugin-vtsatip-<version> vtsatip
+  cd ../.. && make plugins && make install-plugins    (or make install-lib in the plugin)
 
-Es werden nur VDR >= 2.4 und libpthread benötigt (kein curl, kein XML).
+Only VDR >= 2.4 and libpthread are needed (no curl, no XML library).
 
-Aufruf / Umstellung von vtuner-ng
----------------------------------
-  vtuner-ng:   satip -s 192.168.1.20 -D DVBS2 -f 1 (je Gerät ein Daemon)
+Usage / switching from vtuner-ng
+--------------------------------
+  vtuner-ng:   satip -s 192.168.1.20 -D DVBS2 -f 1 (one daemon per device)
   vtsatip:     -P "vtsatip -s 192.168.1.20 -d 2 -D DVBS,DVBS2 -f 1,2"
 
   -s HOST[:PORT][|CAPS][|NAME]
-                   SAT>IP-Server, darf mehrfach angegeben werden (siehe UPnP)
-  -u MODUS         UPnP-Suche: 0 = aus, 1 = an (Standard: an, wenn kein -s angegeben ist)
-  -d NUM           Anzahl der VDR-Geräte = gleichzeitige Streams (Standard 1)
-  -D LISTE         DVBS,DVBS2,DVBT,DVBT2,DVBC (Standard: alle)
-  -f LISTE         feste Server-Frontends je Gerät (0 = Server entscheidet)
-  -c CAIDS         CI-Erweiterung: CA-IDs je CI-Slot des Servers (siehe unten)
-  -i LISTE         CI-Slot (1..4) je VDR-Gerät, 0 = keiner, z. B. -i 1,0
-  -Q               Stream bei Änderung des CI-Zustands NICHT neu starten
-  -T MODUS         unicast (Standard), multicast oder tcp
-  -b ADRESSE       lokale Schnittstelle (IP) für Multicast-Beitritt
-  -p START-ENDE    RTP/RTCP-Portbereich (Standard 45000-47000)
-  -r BYTES         Größe des RTP-Empfangspuffers (Standard 2 MiB)
-  -a               ganzen Transponder anfordern (pids=all), braucht viel Bandbreite
-  -N               Stream bei Leerlauf nicht abbauen
-  -R               keine Echtzeitpriorität versuchen
-  -t 1             Tracing: RTSP-Verkehr und Tuning im Syslog
+                   SAT>IP server, may be given several times (see UPnP)
+  -u MODE          UPnP discovery: 0 = off, 1 = on (default: on if no -s is given)
+  -d NUM           number of VDR devices = simultaneous streams (default 1)
+  -D LIST          DVBS,DVBS2,DVBT,DVBT2,DVBC (default: all)
+  -f LIST          fixed server frontend per device (0 = the server decides)
+  -c CAIDS         CI extension: CA IDs of each CI slot of the server (see below)
+  -i LIST          CI slot (1..4) per VDR device, 0 = none, e.g. -i 1,0
+  -S SIDS          restrict the CI slots to service IDs, e.g. -S '4911,5301;'
+  -Q               do NOT restart a stream when its CI state changes
+  -T MODE          unicast (default), multicast or tcp
+  -b ADDRESS       local interface (IP) used to join multicast groups
+  -p START-STOP    RTP/RTCP port range (default 45000-47000)
+  -r BYTES         size of the RTP receive buffer (default 2 MiB)
+  -a               request the whole transponder (pids=all), needs a lot of bandwidth
+  -A               start with all devices detached (see SVDRP ATTA/DETA)
+  -N               do not tear the stream down when a device becomes idle
+  -R               do not try realtime priority
+  -t 1             tracing: RTSP traffic and tuning in the syslog
 
-Wichtige Unterschiede zu vtuner-ng
+Important differences to vtuner-ng
 ----------------------------------
- * Die Satellitenposition (src=) kommt NICHT mehr aus der DiSEqC-Nachricht,
-   die VDR an das virtuelle Frontend schickte. Sie wird wie im satip-Plugin aus
-   der Beschreibung der Quelle in sources.conf gelesen (führende Zahl):
+ * The satellite position (src=) no longer comes from the DiSEqC message VDR
+   sent to the virtual frontend. Like in the satip plugin it is read from the
+   description of the source in sources.conf (leading number):
         S19.2E  1 Astra 19.2E        -> src=1
         S13.0E  2 Hotbird            -> src=2
-   Ohne Zahl wird src=1 verwendet. Eine Quelle, deren Beschreibung mit "0"
-   beginnt, wird von diesem Plugin nicht bedient.
- * Die diseqc.conf/LNB-Einstellungen von VDR sind für diese Geräte ohne
-   Bedeutung (der SAT>IP-Server macht das).
- * Es gibt kein /dev/dvb/adapterX mehr; Programme außerhalb von VDR können das
-   Gerät nicht verwenden.
+   Without a number src=1 is used. A source whose description starts with "0"
+   is not served by this plugin.
+ * VDR's diseqc.conf / LNB settings have no meaning for these devices (the
+   SAT>IP server does that).
+ * There is no /dev/dvb/adapterX any more; programs other than VDR cannot use
+   the device.
 
-Server-Erkennung per UPnP (ab 0.3.0)
-------------------------------------
-Ohne -s sucht das Plugin SAT>IP-Server selbst (SSDP M-SEARCH auf
-239.255.255.250:1900, alle 60 s wiederholt, dazu NOTIFY alive/byebye). Aus der
-Gerätebeschreibung werden Name, RTSP-Port (Header X-SATIP-RTSP-Port) und
-Fähigkeiten (X_SATIPCAP, z. B. DVBS2-4,DVBT2-2) gelesen. Das Plugin braucht
-dafür weder XML- noch HTTP-Bibliothek.
+Server discovery with UPnP (since 0.3.0)
+----------------------------------------
+Without -s the plugin looks for SAT>IP servers itself (SSDP M-SEARCH to
+239.255.255.250:1900, repeated every 60 s, plus NOTIFY alive/byebye). Name,
+RTSP port (header X-SATIP-RTSP-Port) and capabilities (X_SATIPCAP, e.g.
+DVBS2-4,DVBT2-2) are read from the device description. No XML or HTTP
+library is needed.
 
-  vdr -P 'vtsatip -d 4'                           alles automatisch
-  vdr -P 'vtsatip -d 2 -s 192.168.1.20'            fester Server, keine Suche
+  vdr -P 'vtsatip -d 4'                            everything automatic
+  vdr -P 'vtsatip -d 2 -s 192.168.1.20'            fixed server, no discovery
   vdr -P 'vtsatip -d 4 -u 1 -s 192.168.1.20|DVBS2-2|Octonet -s 192.168.1.30:8554|DVBT2-4'
 
-CAPS gibt wie bei UPnP die Zahl der Frontends je Empfangsart an. Ohne CAPS
-sind es beliebig viele Frontends für die mit -D erlaubten Systeme (so verhält
-sich ein einzelner -s wie bisher). Manuelle Einträge haben Vorrang vor
-gleichen UPnP-Funden und werden nie durch "byebye" entfernt.
+CAPS gives the number of frontends per kind of reception, like UPnP does.
+Without CAPS the server has any number of frontends for the systems allowed by
+-D (so a single -s behaves as before). Manual entries win over the same
+device found by UPnP and are never removed by "byebye".
 
-CI: Die CI-Erweiterung (Slot-Zuordnung) wird nur auf Servern genutzt, die ein
-CI haben. Per UPnP erkannt werden u. a. OctopusNet/Octonet und minisatip;
-bei manuellen Servern gilt "hat CI", außer es steht NOCI in der Liste
-(-s 192.168.1.30|DVBS2-4,NOCI). Mit CI erzwingt man es auch bei UPnP-
-Servern nicht - dort dann den Server mit -s und CAPS eintragen.
+CI: The CI extension (slot assignment) is only used on servers which have a
+CI. UPnP servers are recognised by their model, e.g. OctopusNet/Octonet and
+minisatip; a manual server is assumed to have a CI unless NOCI is in its list
+(-s 192.168.1.30|DVBS2-4,NOCI). A UPnP server which is not recognised cannot
+be forced; configure it with -s and CAPS instead.
 
-Satellitenposition: Hinter CAPS kann mit ':' eine Liste von Positionen
-stehen (Schreibweise wie in VDRs sources.conf), z. B.
+Satellite position: after CAPS a list of positions can follow, separated by
+':' (spelled like in VDR's sources.conf), e.g.
   -s 192.168.1.20|DVBS2-4:S19.2E,S13E|Octonet
-Der Server wird dann nur für Kanäle dieser Positionen verwendet. Das ist
-nützlich, wenn mehrere Server an verschiedenen Satelliten hängen. Ohne
-Filter nimmt der Server alle Positionen (die SAT>IP-Syntax src= kommt aus
-der sources.conf, nicht aus VDRs DiSEqC-Konfiguration).
+The server is then only used for channels of these positions. This is useful
+when several servers are connected to different satellites. Without a filter
+the server takes all positions.
 
-Jedes VDR-Gerät (-d) sucht sich beim Umschalten einen Server mit freiem
-Frontend für die Empfangsart (Sat/Terr/Kabel) und bleibt dabei, solange es
-auf diesem Server benutzt wird. Ist alles belegt, nimmt VDR ein anderes
-Gerät. Bei Leerlauf wird der Server wieder freigegeben. Eine
-Quelle gilt nur als verfügbar, wenn ein bekannter Server das passende System
-liefert. Mit -f (feste Frontends) und mehreren Servern gleichzeitig sollte man
-vorsichtig sein, die Nummer gilt für alle Server.
+Every VDR device (-d) picks a server with a free frontend for the kind of
+reception (sat/terr/cable) when it is switched and stays there as long as it
+is used on that server. If everything is busy VDR uses another device. When
+idle the server is released again. A source is only available if a known
+server supplies the matching system. Be careful with -f (fixed frontends) and
+several servers: the number applies to all servers.
 
-SVDRP: plug vtsatip SCAN    startet sofort eine neue Suche
-       plug vtsatip INFO    zeigt Server (belegt/frei) und Geräte
-Firewall: UDP 1900 (Multicast) und die RTP-Ports (-p) müssen erreichbar sein.
+SVDRP: plug vtsatip SCAN    starts a new search at once
+       plug vtsatip INFO    shows servers (busy/free) and devices
+Firewall: UDP 1900 (multicast) and the RTP ports (-p) must be reachable.
 
-CI/CAM (ab 0.2.0)
------------------
-Unterstützt wird die SAT>IP-Erweiterung "x_pmt/x_ci" (z. B. Digital Devices
-OctopusNet, minisatip mit CA): der Server entschlüsselt mit seinem eigenen
-CI-Slot, VDR bekommt den fertigen Stream.
+CI/CAM (since 0.2.0)
+--------------------
+The SAT>IP extension "x_pmt/x_ci" is supported (e.g. Digital Devices
+OctopusNet, minisatip with CA): the server decrypts with its own CI slot and
+VDR receives the finished stream.
 
   vdr -P 'vtsatip -s 192.168.1.20 -d 2 -c "0x1830,0x1843;0x0500" -i 1,2'
 
-  -c  CA-IDs je Slot: Slot 1 kann 0x1830 und 0x1843, Slot 2 kann 0x0500.
-  -i  Gerät 0 nutzt Slot 1, Gerät 1 nutzt Slot 2. Ohne -i gehört Slot n zu
-      Gerät n-1.
+  -c  CA IDs per slot: slot 1 can do 0x1830 and 0x1843, slot 2 can do 0x0500.
+  -i  device 0 uses slot 1, device 1 uses slot 2. Without -i slot n belongs
+      to device n-1.
 
-Ablauf: Ist ein Kanal verschlüsselt und passt eine CA-ID zum Slot des Geräts,
-sucht das Plugin die PMT-PID des Dienstes in der PAT (die PAT ist immer im
-Stream, VDR-interne Funktionen werden nicht gebraucht), merkt sie sich pro
-Transponder/Dienst und schickt sie als &x_pmt=<pids>&x_ci=<slot> mit. Die
-PMT-PID wird auch in die PID-Liste aufgenommen. Weitere Dienste desselben
-Transponders werden zur x_pmt-Liste hinzugefügt (mehrere Dienste pro CAM, falls
-das CAM das kann). Beim ersten Aufruf eines Kanals ist die PMT-PID noch
-unbekannt: der Stream läuft kurz unverschlüsselt und wird dann automatisch
-einmal mit x_pmt neu gestartet. Danach kommt die PID aus dem Cache.
+How it works: if a channel is encrypted and one of its CA IDs matches the slot
+of the device, the plugin finds the PMT PID of the service in the PAT (the PAT
+is always in the stream, no VDR internals are needed), remembers it per
+transponder/service and sends it as &x_pmt=<pids>&x_ci=<slot>. The PMT PID is
+also added to the PID list. Further services of the same transponder are added
+to the x_pmt list (several services per CAM, if the CAM can do that). When a
+channel is used for the first time the PMT PID is unknown: the stream runs
+unencrypted for a moment and is then restarted once with x_pmt automatically.
+After that the PID comes from the cache.
 
-Der Neustart ist nötig, weil manche Server den CI nur an Streams hängen, die
-mit x_pmt gestartet wurden, und ihn nur beim Abbau der Session freigeben.
-Server, die das nicht brauchen, kann man mit -Q ohne Neustart betreiben.
-Geräte mit CI übernehmen nur Kanäle, deren CA-IDs der Slot kann; VDR
-nutzt für solche Geräte kein eigenes CAM-Plugin (HasInternalCam).
+The restart is necessary because some servers only attach the CI to streams
+which were started with x_pmt and release it only when the session is torn
+down. Servers which do not need that can be run without the restart using -Q.
+Devices with a CI only take channels whose CA IDs the slot can do; VDR does
+not use an own CAM plugin for such devices (HasInternalCam).
 
-Multicast (ab 0.5.0)
---------------------
+Service IDs per CI slot: with -S '4911,5301;' (or in the setup menu) a slot
+can be restricted to certain service IDs, like in vtuner-ng. Slots without a
+list take every service their CA IDs can decrypt. Useful if a slot only has a
+subscription module for a few channels.
+
+Multicast (since 0.5.0)
+-----------------------
   vdr -P 'vtsatip -d 4 -T multicast -b 192.168.1.10'
 
-Das Plugin sendet im SETUP "Transport: RTP/AVP;multicast" ohne Ziel, der Server
-antwortet mit Gruppe, Port, TTL und optional Quelle (SSM). Das Plugin tritt der
-Gruppe bei (IGMP), liest RTP und RTCP von dort und gibt sie beim Abbau wieder
-frei. Steuerung (PLAY, addpids/delpids, Keepalive) läuft unverändert über RTSP.
+In SETUP the plugin sends "Transport: RTP/AVP;multicast" without a
+destination; the server answers with group, port, TTL and optionally a source
+(SSM). The plugin joins the group (IGMP), reads RTP and RTCP from there and
+leaves it when the stream is torn down. Control (PLAY, addpids/delpids,
+keep-alive) still runs over RTSP.
 
-Bietet ein Server kein Multicast an oder lehnt es ab (z. B. 461), nimmt das
-Plugin automatisch Unicast und merkt sich das für diesen Server.
+If a server does not offer multicast or refuses it (e.g. 461) the plugin
+automatically uses unicast and remembers that for this server.
 
-Vorteil: mehrere Clients können denselben Transponder empfangen, ohne dass der
-Server mehrfach sendet. Voraussetzung: IGMP-Snooping im Switch, sonst wird das
-gesamte Netz (vor allem WLAN) mit dem Stream geflutet. -b ist nötig, wenn der
-Rechner mehrere Netzwerkschnittstellen hat. Im Setup-Menü: "Übertragungsart".
-Die Einstellung gilt für neue Sessions.
+Advantage: several clients can receive the same transponder without the
+server sending it several times. Requirement: IGMP snooping in the switch,
+otherwise the whole network (especially WLAN) is flooded with the stream. -b
+is needed if the computer has several network interfaces. In the setup menu:
+"Transport mode". The setting applies to new sessions.
 
-RTP über TCP (ab 0.6.0)
------------------------
+RTP over TCP (since 0.6.0)
+--------------------------
   vdr -P 'vtsatip -T tcp'
 
-Das SETUP enthält "Transport: RTP/AVP/TCP;unicast;interleaved=0-1". Der Server
-schickt RTP (Kanal 0) und RTCP (Kanal 1) dann als "$"-Frames über dieselbe
-TCP-Verbindung wie die RTSP-Antworten; es werden keine UDP-Ports benötigt
-(Firewall, NAT, VPN). Nachteil: TCP-Retransmits können Latenz erzeugen, bei
-Paketverlust staut sich der Stream. Für das normale LAN ist UDP besser.
-Antwortet ein Server mit einem Fehler oder mit UDP, wird für ihn automatisch
-UDP-Unicast verwendet. Im Setup-Menü: "Übertragungsart" = TCP.
+SETUP contains "Transport: RTP/AVP/TCP;unicast;interleaved=0-1". The server
+then sends RTP (channel 0) and RTCP (channel 1) as "$" frames over the same
+TCP connection as the RTSP responses; no UDP ports are needed (firewall, NAT,
+VPN). Drawback: TCP retransmits can add latency and a lost packet stalls the
+stream. UDP is better in a normal LAN. If a server answers with an error or
+with UDP, UDP unicast is used for it automatically. In the setup menu:
+"Transport mode" = TCP.
 
-Server-Eigenheiten (Quirks)
----------------------------
-Statt einer Tabelle mit Gerätenamen reagiert das Plugin selbst auf Server,
-die vom Standard abweichen:
+Whole transponder (since 0.7.0)
+-------------------------------
+With -a (setup menu: "Request all PIDs") the plugin sends pids=all instead of
+a PID list. The server then streams the complete transponder (many Mbit/s),
+VDR picks what it needs, and PID changes cause no RTSP traffic at all. It is
+meant for recording everything of a transponder or for testing. The setting
+takes effect with the next tuning or PID change.
 
- * Session-ID mit führenden Nullen, die der Server nur ohne Nullen akzeptiert
-   (GSS.box, Telestar Digibit R1, Inverto IDL-400, Triax TSS 400): wird eine
-   Anfrage abgelehnt, wiederholt das Plugin sie ohne die Nullen.
- * addpids/delpids unbekannt (FRITZ!WLAN Repeater DVB-C): nach einer
-   Ablehnung wird für diese Session immer die komplette PID-Liste gesendet.
- * Retune innerhalb einer Session abgelehnt (Fritz: erst TEARDOWN): das Plugin
-   baut sofort eine neue Session auf, ohne Wartezeit.
- * Pilot-Erkennung fehlt (GSS.box, Digibit, Inverto, Triax, Kathrein): bei
-   DVB-S2 wird immer plts= mitgeschickt (seit 0.1.2).
- * Frontend-Lock wird nicht gemeldet (Fritz, Schwaiger): ohne Bedeutung, der
-   Lock wird aus dem ersten TS-Paket abgeleitet.
- * 503 "kein freies Frontend" (belegt durch einen anderen Client): der Server
-   wird für 15 s für diese Empfangsart gesperrt und das Gerät wechselt, wenn
-   vorhanden, auf einen anderen Server. Sonst läuft die Wiederholung alle 5 s.
+Server peculiarities (quirks)
+-----------------------------
+Instead of a table of device names the plugin reacts to servers which deviate
+from the standard:
 
-Setup-Menü (ab 0.4.0)
----------------------
-VDR-Setup -> Plugins -> vtsatip. Die Werte stehen in setup.conf und gelten
-sofort, ein Neustart ist nicht nötig. Kommandozeilenoptionen sind die
-Vorgabewerte, gespeicherte Setup-Werte haben Vorrang.
+ * Session ID with leading zeros which the server only accepts without the
+   zeros (GSS.box, Telestar Digibit R1, Inverto IDL-400, Triax TSS 400): if a
+   request is refused the plugin repeats it without the zeros.
+ * addpids/delpids unknown (FRITZ!WLAN Repeater DVB-C): after a refusal the
+   complete PID list is always sent for this session.
+ * Retune inside a session refused (Fritz: TEARDOWN first): the plugin builds
+   a new session at once, without waiting.
+ * No pilot detection (GSS.box, Digibit, Inverto, Triax, Kathrein): for DVB-S2
+   plts= is always sent (since 0.1.2).
+ * Frontend lock is not reported (Fritz, Schwaiger): irrelevant, the lock is
+   derived from the first TS packet.
+ * 503 "no free frontend" (taken by another client): the server is blocked
+   for 15 s for this kind of reception and the device moves to another server
+   if there is one. Otherwise the retry runs every 5 s.
 
-  UPnP-Suche                   automatisch / nein / ja
-                               (automatisch: an, wenn kein -s angegeben ist;
-                               Umschalten startet bzw. stoppt die Suche sofort)
-  EPG-Scan erlauben            die Geräte für VDRs Hintergrund-EPG-Scan nutzen
-  Ungenutzte Streams trennen   Server-Frontend bei Leerlauf freigeben
-  CI-Erweiterung verwenden     zeigt je VDR-Gerät den CI-Slot, die CA-IDs
-                               ("0x1830,0x1843;0x0500") und "Stream bei
-                               CI-Wechsel neu starten"
-  Trace                        RTSP-Verkehr ins Syslog
-  Bekannte SAT>IP-Server       Liste mit belegten/freien Frontends
+Detaching devices (since 0.5.0)
+-------------------------------
+  svdrpsend plug vtsatip DETA [N]     detach device N (no number: all)
+  svdrpsend plug vtsatip ATTA [N]     attach again
+Detached devices release their server stream and offer no sources any more,
+e.g. so that another SAT>IP client can use the frontends. Devices which are
+recording or being watched stay attached (answer 550). With -A / --detached
+the plugin starts with all devices detached.
 
-  Rote Taste "Suchen" startet sofort eine neue UPnP-Suche.
+Setup menu (since 0.4.0)
+------------------------
+VDR Setup -> Plugins -> vtsatip. The values are kept in setup.conf and apply
+at once, no restart is needed. Command line options are the defaults, stored
+setup values take precedence.
 
-setup.conf-Schlüssel (vtsatip.<Name>): EnableCIExtension, CIRestart, CAIDs,
-CISlotDevice0..n, Discovery (-1/0/1), EnableEITScan, DisconnectIdle, Trace.
-Übersetzungen liegen in po/ (de_DE vorhanden); make erzeugt die .mo-Dateien
-(gettext nötig), make install installiert sie.
+  UPnP discovery               automatic / no / yes
+                               (automatic: on if no -s is given; switching
+                               starts or stops the search immediately)
+  Transport mode               unicast / multicast / TCP
+  VDR device N: server frontend
+                               fixed frontend of the server (auto = the
+                               server decides)
+  Enable EPG scanning          use the devices for VDR's background EPG scan
+  Disconnect idle streams      release the server frontend when idle
+  Request all PIDs             pids=all, see above
+  Enable CI extension          shows, per VDR device, the CI slot, the CA IDs
+                               ("0x1830,0x1843;0x0500"), the service IDs
+                               ("4911,5301;") and "Restart stream on CI change"
+  Tracing                      RTSP traffic in the syslog
+  Statistics...                opens the statistics page (see below)
+  Known SAT>IP servers         list with busy/free frontends
 
-Nicht enthalten (bewusst)
--------------------------
- * "CI TNR"-Erweiterung (herstellerspezifisch, DVBViewer).
- * IPv6.
+  The red key "Scan" starts a new UPnP search at once.
 
-Zum Optimieren
---------------
- * Echtzeitpriorität: VDR muss SCHED_FIFO setzen dürfen, z. B. systemd:
-       LimitRTPRIO=10   (und ggf. AmbientCapabilities=CAP_SYS_NICE)
- * Bei Paketverlusten net.core.rmem_max erhöhen, z. B. 4194304, und -r setzen.
+Statistics page (since 0.7.0): per device the server, channel, lock state,
+signal strength and quality, transport (UDP/multicast/TCP), data rate and
+total, RTP packets, lost and reordered packets (with the loss in percent),
+followed by the known servers. The page refreshes once a second.
+
+setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
+CISlotDevice0..n, FrontendDevice0..n, Discovery (-1/0/1), EnableEITScan,
+DisconnectIdle, AllPids, Transport (0/1/2), Trace.
+Translations are in po/ (de_DE is provided); make creates the .mo files
+(gettext is needed), make install installs them.
 
 SVDRP
 -----
-  plug vtsatip INFO       Zustand aller Geräte
-  plug vtsatip TRAC 1     Tracing ein/aus
+  plug vtsatip INFO       state of all devices; per device also rtp= (received
+                          RTP packets), lost= and reordered=
+  plug vtsatip SCAN       search for servers now
+  plug vtsatip ATTA|DETA  see above
+  plug vtsatip TRAC 1     tracing on/off
 
-Lizenz: GPLv2 (siehe COPYING). Enthält Code aus dem satip-Plugin und der
-Idee/dem Ablauf des vtuner-ng-Daemons.
+Not included (deliberately)
+---------------------------
+ * The "CI TNR" extension (vendor specific, DVBViewer).
+ * IPv6.
 
-Service-IDs je CI-Slot: Mit -S '4911,5301;' (oder im Setup-Menü) lässt sich ein
-Slot auf bestimmte Service-IDs beschränken, wie bei vtuner-ng. Slots ohne
-Liste nehmen jeden Dienst, den ihre CA-IDs entschlüsseln können. Praktisch,
-wenn ein Slot nur ein Abo-Modul für wenige Sender hat.
+Tuning tips
+-----------
+ * Realtime priority: VDR must be allowed to set SCHED_FIFO, e.g. with systemd:
+       LimitRTPRIO=10   (and possibly AmbientCapabilities=CAP_SYS_NICE)
+ * If packets are lost raise net.core.rmem_max, e.g. to 4194304, and set -r.
+   The lost= counter in SVDRP INFO and the statistics page show whether it
+   helped.
 
-SVDRP ATTA / DETA
------------------
-  svdrpsend plug vtsatip DETA [N]     Gerät N (ohne Nummer: alle) abkoppeln
-  svdrpsend plug vtsatip ATTA [N]     wieder ankoppeln
-Abgekoppelte Geräte geben ihren Server-Stream frei und bieten keine Quellen
-mehr an, z. B. damit ein anderer SAT>IP-Client die Frontends nutzen kann.
-Geräte, die gerade aufnehmen oder anzeigen, bleiben angekoppelt (Antwort 550).
-Mit -A / --detached startet das Plugin mit abgekoppelten Geräten.
+License: GPLv2 (see COPYING). Contains code from the satip plugin and the
+idea/control flow of the vtuner-ng daemon.
