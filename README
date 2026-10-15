@@ -224,6 +224,11 @@ SVDRP
 Lizenz: GPLv2 (siehe COPYING). Enthält Code aus dem satip-Plugin und der
 Idee/dem Ablauf des vtuner-ng-Daemons.
 
+Service-IDs je CI-Slot: Mit -S '4911,5301;' (oder im Setup-Menü) lässt sich ein
+Slot auf bestimmte Service-IDs beschränken, wie bei vtuner-ng. Slots ohne
+Liste nehmen jeden Dienst, den ihre CA-IDs entschlüsseln können. Praktisch,
+wenn ein Slot nur ein Abo-Modul für wenige Sender hat.
+
 SVDRP ATTA / DETA
 -----------------
   svdrpsend plug vtsatip DETA [N]     Gerät N (ohne Nummer: alle) abkoppeln

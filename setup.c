@@ -20,6 +20,8 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
       ciSlotM[i] = VtSatipConfig.ciSlot[i];
   cString ids = VtSatipConfig.CaIdsString();
   strn0cpy(caIdsM, *ids, sizeof(caIdsM));
+  cString sids = VtSatipConfig.SidsString();
+  strn0cpy(sidsM, *sids, sizeof(sidsM));
   discoveryTextsM[0] = tr("automatic");
   discoveryTextsM[1] = trVDR("no");
   discoveryTextsM[2] = trVDR("yes");
@@ -43,6 +45,7 @@ void cMenuSetupVtSatip::Setup(void)
      for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i)
          Add(new cMenuEditIntItem(*cString::sprintf(tr("  VDR device %d: CI slot"), i + 1), &ciSlotM[i], 0, VTSATIP_MAX_CI_SLOTS, tr("none")));
      Add(new cMenuEditStrItem(tr("  CA IDs (slot 1;slot 2;...)"), caIdsM, sizeof(caIdsM), "0123456789abcdefABCDEFxX,;"));
+     Add(new cMenuEditStrItem(tr("  Service IDs (slot 1;slot 2;...)"), sidsM, sizeof(sidsM), "0123456789xXabcdefABCDEF,; "));
      Add(new cMenuEditBoolItem(tr("  Restart stream on CI change"), &ciRestartM));
      }
   Add(new cMenuEditBoolItem(tr("Tracing"), &traceM));
@@ -83,6 +86,13 @@ void cMenuSetupVtSatip::Store(void)
      }
   else
      Skins.Message(mtError, tr("Invalid CA ID list"));
+  cVtSatipConfig probeSids;
+  if (probeSids.ParseSids(sidsM)) {
+     VtSatipConfig.ParseSids(sidsM);
+     SetupStore("SIDs", sidsM);
+     }
+  else
+     Skins.Message(mtError, tr("Invalid service ID list"));
   VtSatipConfig.ciExtension = ciExtensionM != 0;
   VtSatipConfig.ciRestart = ciRestartM != 0;
   VtSatipConfig.discovery = discoveryM - 1;

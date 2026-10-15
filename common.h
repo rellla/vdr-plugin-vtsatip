@@ -74,6 +74,7 @@ struct cVtSatipConfig {
   bool ciRestart;                    // restart the stream if the "CI state" of a session changes
   int ciSlot[VTSATIP_MAX_DEVICES];   // CI slot (1..VTSATIP_MAX_CI_SLOTS) used by a device, 0 = none
   int caids[VTSATIP_MAX_CI_SLOTS][VTSATIP_MAX_CAIDS + 1]; // zero terminated CA ID lists per slot
+  std::vector<int> sids[VTSATIP_MAX_CI_SLOTS]; // service IDs a slot is restricted to, empty = any
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
@@ -90,7 +91,10 @@ struct cVtSatipConfig {
   bool ParseCaIds(const char *strP);
   cString CaIdsString(void) const;
   bool ParseCiSlots(const char *strP);   // "1,2,0": CI slot per device
-  bool SlotProvidesCa(int slotP, const int *caidsP) const; // slotP: 1..N
+  // "4911,5301;0x1f40": service IDs allowed for slot 1; for slot 2 (empty = no restriction)
+  bool ParseSids(const char *strP);
+  cString SidsString(void) const;
+  bool SlotProvidesCa(int slotP, const int *caidsP, int sidP = 0) const; // slotP: 1..N
   // settings stored in VDR's setup.conf; returns false for unknown names or invalid values
   bool SetupParse(const char *nameP, const char *valueP);
   bool UseDiscovery(void) const { return discovery < 0 ? servers.empty() : discovery > 0; }

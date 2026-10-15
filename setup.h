@@ -24,6 +24,7 @@ private:
   const char *transportTextsM[2];
   int ciSlotM[VTSATIP_MAX_DEVICES];
   char caIdsM[128];
+  char sidsM[128];
   const char *discoveryTextsM[3];
   size_t serverLinesM;
 

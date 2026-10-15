@@ -61,3 +61,9 @@ msgstr "Multicast"
 
 msgid "Transport mode"
 msgstr "Übertragungsart"
+
+msgid "  Service IDs (slot 1;slot 2;...)"
+msgstr "  Service-IDs (Slot 1;Slot 2;...)"
+
+msgid "Invalid service ID list"
+msgstr "Ungültige Service-ID-Liste"

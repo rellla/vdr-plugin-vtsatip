@@ -9,6 +9,16 @@ int main(){
   CHECK(strcmp(*c.CaIdsString(), "0x1830,0x1843;0x0500")==0, "CA IDs formatted back");
   int ch[]={0x1843,0}; int other[]={0x9999,0};
   CHECK(c.SlotProvidesCa(1,ch) && !c.SlotProvidesCa(2,ch) && !c.SlotProvidesCa(1,other) && !c.SlotProvidesCa(0,ch), "slot provides CA");
+  { // SID filter per slot
+    int sidCh[] = {0x1843, 0};
+    CHECK(c.ParseSids("4911,0x14ed;;7") && c.sids[0].size() == 2 && c.sids[0][1] == 0x14ed && c.sids[1].empty() && c.sids[2][0] == 7, "SID lists parsed");
+    CHECK(strcmp(*c.SidsString(), "4911,5357;;7") == 0, "SID lists formatted back");
+    CHECK(c.SlotProvidesCa(1, sidCh, 4911) && !c.SlotProvidesCa(1, sidCh, 1234) && c.SlotProvidesCa(1, sidCh, 0), "slot 1 restricted to its SIDs");
+    CHECK(c.ParseCaIds("0x1830,0x1843;0x1843") && c.SlotProvidesCa(2, sidCh, 1234), "slot without SID list takes every service");
+    CHECK(!c.ParseSids("abc") && !c.ParseSids("0") && c.sids[0].size() == 2, "invalid SID list rejected, old value kept");
+    CHECK(c.ParseSids("") && c.sids[0].empty(), "empty list clears the restriction");
+    c.ParseCaIds("0x1830,0x1843;0x0500");
+  }
   CHECK(!c.ParseCaIds("0xZZ") && c.caids[0][0]==0x1830, "invalid list rejected, old value kept");
   CHECK(!c.ParseCaIds("1;2;3;4;5"), "too many slots rejected");
   CHECK(c.ParseCiSlots("1,0,2") && c.ciSlot[0]==1 && c.ciSlot[1]==0 && c.ciSlot[2]==2, "CI slot assignment");

@@ -255,7 +255,7 @@ bool cVtSatipDevice::ProvidesChannel(const cChannel *channelP, int priorityP, bo
 
   // A device with an own CI must not claim encrypted channels its CI cannot decrypt:
   // VDR assumes that devices with an internal CAM take care of it.
-  bool ciMismatch = channelP && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && !ProvidesCa(channelP->Caids());
+  bool ciMismatch = channelP && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && !ProvidesCa(channelP->Caids(), channelP->Sid());
   // the CI is only usable on a server that has one
   if (channelP && !ciMismatch && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 &&
       !cVtServers::Get()->Provides(MediumOfSource(channelP->Source()), *cSource::ToString(channelP->Source()), true))
@@ -268,7 +268,7 @@ bool cVtSatipDevice::ProvidesChannel(const cChannel *channelP, int priorityP, bo
                (channelP->Apid(0) && !HasPid(channelP->Apid(0))) ||
                (channelP->Dpid(0) && !HasPid(channelP->Dpid(0)))) {
               if (channelP->Ca() >= CA_ENCRYPTED_MIN) {
-                 if (CiSlot() > 0 && ProvidesCa(channelP->Caids()))
+                 if (CiSlot() > 0 && ProvidesCa(channelP->Caids(), channelP->Sid()))
                     result = true; // decrypted by the CI of the server
                  else if (CamSlot()) {
                     if (CamSlot()->CanDecrypt(channelP))
@@ -297,9 +297,9 @@ int cVtSatipDevice::CiSlot(void) const
   return VtSatipConfig.ciExtension ? VtSatipConfig.ciSlot[indexM] : 0;
 }
 
-bool cVtSatipDevice::ProvidesCa(const int *caidsP) const
+bool cVtSatipDevice::ProvidesCa(const int *caidsP, int sidP) const
 {
-  return VtSatipConfig.SlotProvidesCa(CiSlot(), caidsP);
+  return VtSatipConfig.SlotProvidesCa(CiSlot(), caidsP, sidP);
 }
 
 bool cVtSatipDevice::HasInternalCam(void)
@@ -432,14 +432,14 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   // pick the server with a free frontend for this kind of source (kept while the device stays on it)
   std::string host, serverName;
   int port = 0;
-  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName, *cSource::ToString(channelP->Source()), channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids()))) {
+  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName, *cSource::ToString(channelP->Source()), channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids(), channelP->Sid()))) {
      vterror("no SAT>IP server with a free frontend for '%s' [device %u]", channelP->Name(), indexM);
      return false;
      }
   deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, serverName.c_str());
   int ci = 0;
   int pmt = 0;
-  if (channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids())) {
+  if (channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids(), channelP->Sid())) {
      ci = CiSlot();
      pmt = cVtPmtCache::Get(channelP->Source(), channelP->Transponder(), channelP->Sid());
      }

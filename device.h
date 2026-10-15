@@ -56,7 +56,7 @@ private:
   cVtSatipDevice &operator=(const cVtSatipDevice &);
 
   int CiSlot(void) const;
-  bool ProvidesCa(const int *caidsP) const;
+  bool ProvidesCa(const int *caidsP, int sidP = 0) const;
   void FeedPat(const uchar *dataP, int lengthP);
   uchar *GetData(int *availableP = NULL, bool checkTsBufferP = false);
   void SkipData(int countP);

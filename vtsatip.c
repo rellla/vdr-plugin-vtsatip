@@ -77,6 +77,8 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -c CAIDS, --caids=CAIDS  CI extension: CA IDs supported by each CI slot of the server,\n"
          "                           ids separated by comma, slots by semicolon,\n"
          "                           e.g. -c '0x1830,0x1843;0x0500' (slot 1; slot 2)\n"
+         "  -S SIDS,  --sids=SIDS    restrict the CI slots to these service IDs (slots separated by\n"
+         "                           semicolon, empty = no restriction), e.g. -S '4911,5301;'\n"
          "  -i LIST,  --ciassign=LIST\n"
          "                           CI slot (1..4) used by each device, 0 = none, e.g. -i 1,0\n"
          "  -Q,       --noci-restart do not restart a stream when its CI state changes\n"
@@ -216,6 +218,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "delsys",       required_argument, NULL, 'D' },
     { "frontend",     required_argument, NULL, 'f' },
     { "caids",        required_argument, NULL, 'c' },
+    { "sids",         required_argument, NULL, 'S' },
     { "ciassign",     required_argument, NULL, 'i' },
     { "noci-restart", no_argument,       NULL, 'Q' },
     { "transport",    required_argument, NULL, 'T' },
@@ -229,7 +232,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:QT:b:p:r:NRAt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:S:QT:b:p:r:NRAt:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -262,6 +265,12 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                   return false;
                   }
                VtSatipConfig.ciExtension = true;
+               break;
+          case 'S':
+               if (!VtSatipConfig.ParseSids(optarg)) {
+                  fprintf(stderr, "vtsatip: invalid SID list '%s'\n", optarg);
+                  return false;
+                  }
                break;
           case 'i':
                if (!VtSatipConfig.ParseCiSlots(optarg)) {
