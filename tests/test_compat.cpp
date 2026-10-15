@@ -42,7 +42,17 @@ int main(int argc, char **argv) {
   if (mode == "allpids")
     VtSatipConfig.allPids = true;
   Sink sink; cVtTuner t(sink);
-  if (mode == "allpids") {
+  if (mode == "lose") {
+    t.SetChannel(TP1);
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return t.Packets() > 300; }, 6000), "RTP packets are counted");
+    unsigned long p = t.Packets(), l = t.PacketsLost();
+    printf("   %lu packets, %lu lost\n", p, l);
+    CHECK(l > 0 && l * 100 / (p + l) >= 5 && l * 100 / (p + l) <= 15, "about every 10th packet is reported as lost");
+    CHECK(t.PacketsReordered() == 0, "nothing reordered");
+    CHECK(strstr(*t.GetInformation(), "lost=") != NULL, "loss is part of the tuner information");
+  }
+  else if (mode == "allpids") {
     t.SetChannel(TP1);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.HasPid(200) && sink.HasPid(100); }, 4000), "all PIDs arrive without asking for them");
     int plays = Count(LogText("server.log"), "REQ PLAY");

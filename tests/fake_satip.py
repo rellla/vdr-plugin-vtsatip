@@ -52,6 +52,8 @@ def sender(st, sock):
             chunk = data[i:i + 188 * 7]
             st.seq = (st.seq + 1) & 0xffff
             hdr = struct.pack(">BBHII", 0x80, 33, st.seq, int(time.time() * 90000) & 0xffffffff, 1)
+            if "lose" in FLAGS and st.seq % 10 == 0:
+                continue  # simulate a lost datagram
             if st.tcp:
                 st.send(b"$" + bytes([0]) + struct.pack(">H", len(hdr + chunk)) + hdr + chunk)
             else:

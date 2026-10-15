@@ -52,6 +52,13 @@ private:
   std::atomic<cVtRtsp *> tcpRtspM;   // RTP over TCP: the RTSP connection carries the stream
   std::atomic<int> tcpRtpChM;
   std::atomic<int> tcpRtcpChM;
+  // RTP sequence tracking (receiver thread); the counters are totals since the start
+  std::atomic<unsigned long> packetsM;
+  std::atomic<unsigned long> lostM;
+  std::atomic<unsigned long> reorderedM;
+  std::atomic<bool> resetSeqM;
+  bool seqValidM;
+  unsigned expectedSeqM;
   static void OnInterleaved(void *ctxP, int channelP, const uchar *dataP, int lengthP);
   void CloseSocketsLocked(void);
   void ProcessRtp(const uchar *bufP, int lenP);
@@ -65,6 +72,11 @@ public:
   // join the multicast group of the stream (source = SSM source or empty)
   bool OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP);
   void ResetUnicast(void) { Open(); }
+  // forget the expected sequence number (new session or retune, the server may start a new numbering)
+  void ResetSequence(void) { resetSeqM = true; }
+  unsigned long Packets(void) const { return packetsM.load(); }
+  unsigned long Lost(void) const { return lostM.load(); }
+  unsigned long Reordered(void) const { return reorderedM.load(); }
   // RTP over TCP: read the stream from the RTSP connection (NULL = back to the UDP sockets)
   void SetTcp(cVtRtsp *rtspP, int rtpChannelP = 0, int rtcpChannelP = 1);
   bool IsMulticast(void) const { return multicastM; }
@@ -152,6 +164,9 @@ public:
   int SignalStrength(void) const { return strengthM.load(); }
   double SignalStrengthDBm(void) const;
   int SignalQuality(void) const { return qualityM.load(); }
+  unsigned long Packets(void) const { return receiverM.Packets(); }
+  unsigned long PacketsLost(void) const { return receiverM.Lost(); }
+  unsigned long PacketsReordered(void) const { return receiverM.Reordered(); }
   int FrontendId(void) const { return frontendM.load(); }
   cString GetInformation(void);
 };

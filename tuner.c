@@ -29,7 +29,13 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
   multicastM(false),
   tcpRtspM(NULL),
   tcpRtpChM(0),
-  tcpRtcpChM(1)
+  tcpRtcpChM(1),
+  packetsM(0),
+  lostM(0),
+  reorderedM(0),
+  resetSeqM(false),
+  seqValidM(false),
+  expectedSeqM(0)
 {
 }
 
@@ -209,6 +215,25 @@ void cVtReceiver::ProcessRtp(const uchar *bufP, int lenP)
      }
   if (hdr >= lenP)
      return;
+  if (hdr >= 12) { // a real RTP header: count lost and reordered packets
+     unsigned seq = (unsigned)((bufP[2] << 8) | bufP[3]);
+     ++packetsM;
+     if (resetSeqM.exchange(false))
+        seqValidM = false;
+     if (seqValidM) {
+        unsigned diff = (seq - expectedSeqM) & 0xFFFF;
+        if (diff == 0 || diff < 0x8000) {
+           lostM += diff;
+           expectedSeqM = (seq + 1) & 0xFFFF;
+           }
+        else
+           ++reorderedM; // late or duplicate, the expectation stays
+        }
+     else {
+        seqValidM = true;
+        expectedSeqM = (seq + 1) & 0xFFFF;
+        }
+     }
   int len = lenP - hdr;
   len -= len % TS_SIZE;
   if (len <= 0 || bufP[hdr] != TS_SYNC_BYTE)
@@ -446,6 +471,7 @@ double cVtTuner::SignalStrengthDBm(void) const
 
 void cVtTuner::DropSession(void)
 {
+  receiverM.ResetSequence();
   acceptM = false;
   lockM = false;
   sessionUpM = false;
@@ -646,6 +672,7 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
   strengthM = qualityM = -1;
   levelM = 0;
   sinkM.OnRetune();
+  receiverM.ResetSequence();
 
   // A server may refuse a retune inside a running session (e.g. FRITZ!WLAN Repeater DVB-C wants a
   // TEARDOWN first). One retry with a brand-new session handles that without any server list.
@@ -869,8 +896,8 @@ cString cVtTuner::GetInformation(void)
   std::string pmt = wantPmtM.empty() ? std::string("-") : JoinPids(wantPmtM);
   int ci = wantCiSlotM;
   mutexM.Unlock();
-  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu pids=%zu ci=%d pmt=%s params=%s",
+  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu rtp=%lu lost=%lu reordered=%lu pids=%zu ci=%d pmt=%s params=%s",
                           sessionUpM.load() ? "up" : "down", (int)acceptM.load(), (int)lockM.load(),
                           frontendM.load(), strengthM.load(), qualityM.load(), bytesM.load(),
-                          pids, ci, pmt.c_str(), params.c_str());
+                          receiverM.Packets(), receiverM.Lost(), receiverM.Reordered(), pids, ci, pmt.c_str(), params.c_str());
 }
