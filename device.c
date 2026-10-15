@@ -148,7 +148,7 @@ void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
   }
   std::string host, name;
   int port = 0;
-  if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name, 15000, *source)) {
+  if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name, 15000, *source, ci > 0)) {
      vtinfo("server %s:%d has no free frontend, device %u moves to %s:%d", hostP.c_str(), portP, indexM, host.c_str(), port);
      deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str());
      tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
@@ -253,6 +253,10 @@ bool cVtSatipDevice::ProvidesChannel(const cChannel *channelP, int priorityP, bo
   // A device with an own CI must not claim encrypted channels its CI cannot decrypt:
   // VDR assumes that devices with an internal CAM take care of it.
   bool ciMismatch = channelP && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && !ProvidesCa(channelP->Caids());
+  // the CI is only usable on a server that has one
+  if (channelP && !ciMismatch && channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 &&
+      !cVtServers::Get()->Provides(MediumOfSource(channelP->Source()), *cSource::ToString(channelP->Source()), true))
+     ciMismatch = true;
   if (channelP && !ciMismatch && ProvidesTransponder(channelP)) {
      result = hasPriority;
      if (priorityP > IDLEPRIORITY && Receiving()) {
@@ -379,7 +383,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   // pick the server with a free frontend for this kind of source (kept while the device stays on it)
   std::string host, serverName;
   int port = 0;
-  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName, *cSource::ToString(channelP->Source()))) {
+  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName, *cSource::ToString(channelP->Source()), channelP->Ca() >= CA_ENCRYPTED_MIN && CiSlot() > 0 && ProvidesCa(channelP->Caids()))) {
      vterror("no SAT>IP server with a free frontend for '%s' [device %u]", channelP->Name(), indexM);
      return false;
      }

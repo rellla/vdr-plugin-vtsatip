@@ -63,6 +63,8 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "                           address of a SAT>IP server, can be given several times.\n"
          "                           CAPS = frontends per delivery system as announced by UPnP,\n"
          "                           e.g. DVBS2-4,DVBT2-2 (default: unlimited for the systems of -D);\n"
+         "                           add CI or NOCI to the list to tell whether the server has a CI\n"
+         "                           slot (default: yes; UPnP: OctopusNet, minisatip),\n"
          "                           DVBS2-4:S19.2E,S13E limits the server to these satellite positions\n"
          "                           Without -s all servers are found by UPnP.\n"
          "  -u MODE,  --upnp=MODE    UPnP discovery: 0 = off, 1 = on (default: on if no -s is given)\n"
@@ -115,6 +117,19 @@ bool cPluginVtSatip::ParseServer(const char *paramP)
         *filter++ = 0;
         srv.filters = cVtServers::ParseFilters(filter);
         }
+     { // optional CI / NOCI token among the capabilities
+       std::string rest;
+       char *save = NULL;
+       for (char *t = strtok_r(caps, ",", &save); t; t = strtok_r(NULL, ",", &save)) {
+           if (!strcasecmp(t, "CI"))
+              srv.ci = 1;
+           else if (!strcasecmp(t, "NOCI"))
+              srv.ci = 0;
+           else
+              rest += (rest.empty() ? "" : ",") + std::string(t);
+           }
+       strcpy(caps, rest.c_str());
+     }
      if (*caps && !cVtServers::ParseCaps(caps, srv.caps)) {
         free(buf);
         return false;
@@ -308,7 +323,7 @@ bool cPluginVtSatip::Initialize(void)
          s.caps[VTSATIP_MEDIUM_TERR]  = (VtSatipConfig.systems & VTSATIP_SYS_TERR)  ? VTSATIP_UNLIMITED : 0;
          s.caps[VTSATIP_MEDIUM_CABLE] = (VtSatipConfig.systems & VTSATIP_SYS_CABLE) ? VTSATIP_UNLIMITED : 0;
          }
-      cVtServers::Get()->AddManual(s.host, s.port, s.name, s.caps, s.filters);
+      cVtServers::Get()->AddManual(s.host, s.port, s.name, s.caps, s.filters, s.ci);
       vtinfo("server %s:%d configured", s.host.c_str(), s.port);
       }
   vtinfo("%d device(s), UPnP discovery %s", VtSatipConfig.devices, VtSatipConfig.UseDiscovery() ? "on" : "off");

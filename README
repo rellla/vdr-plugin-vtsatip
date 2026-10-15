@@ -89,6 +89,12 @@ sind es beliebig viele Frontends für die mit -D erlaubten Systeme (so verhält
 sich ein einzelner -s wie bisher). Manuelle Einträge haben Vorrang vor
 gleichen UPnP-Funden und werden nie durch "byebye" entfernt.
 
+CI: Die CI-Erweiterung (Slot-Zuordnung) wird nur auf Servern genutzt, die ein
+CI haben. Per UPnP erkannt werden u. a. OctopusNet/Octonet und minisatip;
+bei manuellen Servern gilt "hat CI", außer es steht NOCI in der Liste
+(-s 192.168.1.30|DVBS2-4,NOCI). Mit CI erzwingt man es auch bei UPnP-
+Servern nicht - dort dann den Server mit -s und CAPS eintragen.
+
 Satellitenposition: Hinter CAPS kann mit ':' eine Liste von Positionen
 stehen (Schreibweise wie in VDRs sources.conf), z. B.
   -s 192.168.1.20|DVBS2-4:S19.2E,S13E|Octonet

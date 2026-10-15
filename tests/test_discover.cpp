@@ -84,6 +84,15 @@ static void Units() {
     CHECK(q.Assign(0, 0, h3, p3, NULL, "S19.2E") && h3 == "A", "device moves to the server of the new position");
     CHECK(!q.Assign(2, 0, h3, p3, NULL, "S0.8W"), "no server for 0.8W");
   }
+  { // CI capable servers
+    cVtServers q; int c1[3] = {1, 0, 0};
+    q.AddManual("A", 554, "A", c1, std::vector<std::string>(), 0);
+    CHECK(q.Provides(0) && !q.Provides(0, NULL, true), "NOCI server is not offered for CI channels");
+    q.AddManual("B", 554, "B", c1);
+    std::string h4; int p4;
+    CHECK(q.Assign(0, 0, h4, p4, NULL, NULL, true) && h4 == "B", "CI channel goes to the CI server");
+    CHECK(cVtServers::ModelHasCi("OctopusNet", "") && cVtServers::ModelHasCi("x", "minisatip on pi") && !cVtServers::ModelHasCi("Fritz!Box", "FRITZ!WLAN Repeater"), "CI model detection");
+  }
   CHECK(!s.Remove("A") , "manual servers cannot be removed by UPnP");
   int c[3] = {1, 0, 0};
   CHECK(!s.Update("uuid-x", "B", 554, "dup", "", c, 100) && s.Count() == 2, "UPnP duplicate of a manual server is ignored");
