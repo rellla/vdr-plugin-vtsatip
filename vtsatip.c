@@ -62,7 +62,8 @@ const char *cPluginVtSatip::CommandLineHelp(void)
   return "  -s HOST[:PORT][|CAPS][|NAME], --server=...\n"
          "                           address of a SAT>IP server, can be given several times.\n"
          "                           CAPS = frontends per delivery system as announced by UPnP,\n"
-         "                           e.g. DVBS2-4,DVBT2-2 (default: unlimited for the systems of -D)\n"
+         "                           e.g. DVBS2-4,DVBT2-2 (default: unlimited for the systems of -D);\n"
+         "                           DVBS2-4:S19.2E,S13E limits the server to these satellite positions\n"
          "                           Without -s all servers are found by UPnP.\n"
          "  -u MODE,  --upnp=MODE    UPnP discovery: 0 = off, 1 = on (default: on if no -s is given)\n"
          "  -d NUM,   --devices=NUM  number of VDR devices (= simultaneous streams), default 1\n"
@@ -108,6 +109,11 @@ bool cPluginVtSatip::ParseServer(const char *paramP)
      if (name) {
         *name++ = 0;
         srv.name = name;
+        }
+     char *filter = strchr(caps, ':'); // DVBS2-4:S19.2E,S13E
+     if (filter) {
+        *filter++ = 0;
+        srv.filters = cVtServers::ParseFilters(filter);
         }
      if (*caps && !cVtServers::ParseCaps(caps, srv.caps)) {
         free(buf);
@@ -302,7 +308,7 @@ bool cPluginVtSatip::Initialize(void)
          s.caps[VTSATIP_MEDIUM_TERR]  = (VtSatipConfig.systems & VTSATIP_SYS_TERR)  ? VTSATIP_UNLIMITED : 0;
          s.caps[VTSATIP_MEDIUM_CABLE] = (VtSatipConfig.systems & VTSATIP_SYS_CABLE) ? VTSATIP_UNLIMITED : 0;
          }
-      cVtServers::Get()->AddManual(s.host, s.port, s.name, s.caps);
+      cVtServers::Get()->AddManual(s.host, s.port, s.name, s.caps, s.filters);
       vtinfo("server %s:%d configured", s.host.c_str(), s.port);
       }
   vtinfo("%d device(s), UPnP discovery %s", VtSatipConfig.devices, VtSatipConfig.UseDiscovery() ? "on" : "off");

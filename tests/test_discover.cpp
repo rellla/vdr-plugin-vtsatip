@@ -72,6 +72,18 @@ static void Units() {
     q.Unassign(0); q.Unassign(1);
     CHECK(!q.Reassign(2, 0, "B", 554, h2, p2) && q.Assign(2, 0, h2, p2) == false, "no alternative: Reassign fails, both busy");
   }
+  { // satellite position filters: A = 19.2E only, B = 13E only
+    cVtServers q; int a3[3] = {2, 0, 0}, b3[3] = {2, 0, 0};
+    q.AddManual("A", 554, "A", a3, cVtServers::ParseFilters("s19.2e"));
+    q.AddManual("B", 554, "B", b3, cVtServers::ParseFilters("S13E, S28.2E"));
+    std::string h3; int p3;
+    CHECK(cVtServers::ParseFilters("S19.2E,S13E").size() == 2 && cVtServers::ParseFilters("").empty(), "filter list parsed");
+    CHECK(q.Provides(0, "S13E") && q.Provides(0, "S28.2E") && !q.Provides(0, "S0.8W") && q.Provides(0, NULL), "Provides honours the satellite position");
+    CHECK(q.Assign(0, 0, h3, p3, NULL, "S13E") && h3 == "B", "13E goes to B");
+    CHECK(q.Assign(1, 0, h3, p3, NULL, "S19.2E") && h3 == "A", "19.2E goes to A");
+    CHECK(q.Assign(0, 0, h3, p3, NULL, "S19.2E") && h3 == "A", "device moves to the server of the new position");
+    CHECK(!q.Assign(2, 0, h3, p3, NULL, "S0.8W"), "no server for 0.8W");
+  }
   CHECK(!s.Remove("A") , "manual servers cannot be removed by UPnP");
   int c[3] = {1, 0, 0};
   CHECK(!s.Update("uuid-x", "B", 554, "dup", "", c, 100) && s.Count() == 2, "UPnP duplicate of a manual server is ignored");

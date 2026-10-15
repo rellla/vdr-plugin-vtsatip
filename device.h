@@ -41,6 +41,7 @@ private:
   // what the tuner was told last, to be able to move to another server
   cMutex lastMutexM;
   cString lastParamsM;
+  cString lastSourceM;
   int lastCiM;
   int lastPmtM;
   int lastMediumM;

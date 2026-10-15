@@ -136,18 +136,19 @@ void cVtSatipDevice::FeedPat(const uchar *dataP, int lengthP)
 // The server answered 503 (no free frontend, e.g. used by another client): try another server.
 void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
 {
-  cString params;
+  cString params, source;
   int ci, pmt, medium;
   {
     cMutexLock lock(&lastMutexM);
     params = lastParamsM;
+    source = lastSourceM;
     ci = lastCiM;
     pmt = lastPmtM;
     medium = lastMediumM;
   }
   std::string host, name;
   int port = 0;
-  if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name)) {
+  if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name, 15000, *source)) {
      vtinfo("server %s:%d has no free frontend, device %u moves to %s:%d", hostP.c_str(), portP, indexM, host.c_str(), port);
      deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str());
      tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
@@ -233,7 +234,7 @@ bool cVtSatipDevice::ProvidesSource(int sourceP) const
      return false;
   int medium = MediumOfSource(sourceP);
   // the delivery system must be enabled (-D) and a known server must have a frontend for it
-  return medium >= 0 && SystemEnabled(medium) && cVtServers::Get()->Provides(medium);
+  return medium >= 0 && SystemEnabled(medium) && cVtServers::Get()->Provides(medium, *cSource::ToString(sourceP));
 }
 
 bool cVtSatipDevice::ProvidesTransponder(const cChannel *channelP) const
@@ -378,7 +379,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   // pick the server with a free frontend for this kind of source (kept while the device stays on it)
   std::string host, serverName;
   int port = 0;
-  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName)) {
+  if (!cVtServers::Get()->Assign((int)indexM, MediumOfSource(channelP->Source()), host, port, &serverName, *cSource::ToString(channelP->Source()))) {
      vterror("no SAT>IP server with a free frontend for '%s' [device %u]", channelP->Name(), indexM);
      return false;
      }
@@ -399,6 +400,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   {
     cMutexLock lock(&lastMutexM);
     lastParamsM = params;
+    lastSourceM = cSource::ToString(channelP->Source());
     lastCiM = ci;
     lastPmtM = pmt;
     lastMediumM = MediumOfSource(channelP->Source());

@@ -73,7 +73,43 @@ int cVtServers::Used(const std::string &idP, int mediumP, int exceptDeviceP) con
   return n;
 }
 
-void cVtServers::AddManual(const std::string &hostP, int portP, const std::string &nameP, const int capsP[VTSATIP_MEDIUM_COUNT])
+std::vector<std::string> cVtServers::ParseFilters(const char *strP)
+{
+  std::vector<std::string> list;
+  if (!strP)
+     return list;
+  char *buf = strdup(strP);
+  if (!buf)
+     return list;
+  char *save = NULL;
+  for (char *t = strtok_r(buf, ",", &save); t; t = strtok_r(NULL, ",", &save)) {
+      while (*t == ' ')
+            ++t;
+      std::string f;
+      for (; *t && *t != ' '; ++t)
+          f += (char)toupper((unsigned char)*t);
+      if (!f.empty())
+         list.push_back(f);
+      }
+  free(buf);
+  return list;
+}
+
+bool cVtServers::FilterAllows(const std::vector<std::string> &filtersP, const char *sourceP)
+{
+  if (filtersP.empty() || !sourceP || !*sourceP)
+     return true;
+  std::string s;
+  for (const char *p = sourceP; *p; ++p)
+      s += (char)toupper((unsigned char)*p);
+  for (size_t i = 0; i < filtersP.size(); ++i)
+      if (filtersP[i] == s)
+         return true;
+  return false;
+}
+
+void cVtServers::AddManual(const std::string &hostP, int portP, const std::string &nameP, const int capsP[VTSATIP_MEDIUM_COUNT],
+                           const std::vector<std::string> &filtersP)
 {
   cMutexLock lock(&mutexM);
   cVtServerInfo s;
@@ -83,6 +119,7 @@ void cVtServers::AddManual(const std::string &hostP, int portP, const std::strin
   s.name = nameP.empty() ? hostP : nameP;
   s.manual = true;
   s.expires = 0;
+  s.filters = filtersP;
   for (int i = 0; i < VTSATIP_MEDIUM_COUNT; ++i)
       s.busyUntil[i] = 0;
   for (int i = 0; i < VTSATIP_MEDIUM_COUNT; ++i)
@@ -174,11 +211,12 @@ void cVtServers::Clear(void)
       bindingsM[d] = cBinding();
 }
 
-bool cVtServers::Provides(int mediumP) const
+bool cVtServers::Provides(int mediumP, const char *sourceP) const
 {
   cMutexLock lock(&mutexM);
   for (size_t i = 0; i < serversM.size(); ++i)
-      if (mediumP >= 0 && mediumP < VTSATIP_MEDIUM_COUNT && serversM[i].caps[mediumP] > 0)
+      if (mediumP >= 0 && mediumP < VTSATIP_MEDIUM_COUNT && serversM[i].caps[mediumP] > 0 &&
+          (mediumP != VTSATIP_MEDIUM_SAT || FilterAllows(serversM[i].filters, sourceP)))
          return true;
   return false;
 }
@@ -189,7 +227,7 @@ int cVtServers::Count(void) const
   return (int)serversM.size();
 }
 
-bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP, std::string *nameP)
+bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP, std::string *nameP, const char *sourceP)
 {
   if (deviceP < 0 || deviceP >= VTSATIP_MAX_DEVICES || mediumP < 0 || mediumP >= VTSATIP_MEDIUM_COUNT)
      return false;
@@ -197,7 +235,8 @@ bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP
   cBinding &b = bindingsM[deviceP];
   if (b.valid) {
      int i = Find(b.id);
-     if (i >= 0 && b.medium == mediumP && serversM[i].caps[mediumP] > 0) { // keep the server, it is ours already
+     if (i >= 0 && b.medium == mediumP && serversM[i].caps[mediumP] > 0 &&
+         (mediumP != VTSATIP_MEDIUM_SAT || FilterAllows(serversM[i].filters, sourceP))) { // keep the server, it is ours already
         hostP = serversM[i].host;
         portP = serversM[i].port;
         if (nameP)
@@ -210,6 +249,8 @@ bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP
   for (size_t i = 0; i < serversM.size(); ++i) {
       const cVtServerInfo &s = serversM[i];
       if (s.busyUntil[mediumP] > now)
+         continue;
+      if (mediumP == VTSATIP_MEDIUM_SAT && !FilterAllows(s.filters, sourceP))
          continue;
       if (s.caps[mediumP] > Used(s.id, mediumP, deviceP)) {
          b.valid = true;
@@ -249,8 +290,12 @@ cString cVtServers::Info(void) const
              caps = cString::sprintf("%s%s%s %d/%s", *caps, isempty(*caps) ? "" : ", ", names[m], used,
                                      v.caps[m] >= VTSATIP_UNLIMITED ? "unlimited" : *cString::sprintf("%d", v.caps[m]));
              }
-      s = cString::sprintf("%sserver %s:%d '%s'%s%s [%s] (%s)\n", *s, v.host.c_str(), v.port, v.name.c_str(),
-                           v.model.empty() ? "" : " model ", v.model.c_str(), *caps, v.manual ? "manual" : "UPnP");
+      std::string flt;
+      for (size_t k = 0; k < v.filters.size(); ++k)
+          flt += (k ? "," : "") + v.filters[k];
+      s = cString::sprintf("%sserver %s:%d '%s'%s%s [%s]%s%s (%s)\n", *s, v.host.c_str(), v.port, v.name.c_str(),
+                           v.model.empty() ? "" : " model ", v.model.c_str(), *caps,
+                           flt.empty() ? "" : " only ", flt.c_str(), v.manual ? "manual" : "UPnP");
       }
   return s;
 }
@@ -294,7 +339,7 @@ void cVtServers::MarkBusy(const std::string &hostP, int portP, int mediumP, int 
 }
 
 bool cVtServers::Reassign(int deviceP, int mediumP, const std::string &failedHostP, int failedPortP,
-                          std::string &hostP, int &portP, std::string *nameP, int busyMsP)
+                          std::string &hostP, int &portP, std::string *nameP, int busyMsP, const char *sourceP)
 {
   MarkBusy(failedHostP, failedPortP, mediumP, busyMsP);
   if (deviceP < 0 || deviceP >= VTSATIP_MAX_DEVICES || mediumP < 0 || mediumP >= VTSATIP_MEDIUM_COUNT)
@@ -304,6 +349,8 @@ bool cVtServers::Reassign(int deviceP, int mediumP, const std::string &failedHos
   for (size_t i = 0; i < serversM.size(); ++i) {
       const cVtServerInfo &s = serversM[i];
       if (s.busyUntil[mediumP] > now || (s.host == failedHostP && s.port == failedPortP))
+         continue;
+      if (mediumP == VTSATIP_MEDIUM_SAT && !FilterAllows(s.filters, sourceP))
          continue;
       if (s.caps[mediumP] > Used(s.id, mediumP, deviceP)) {
          cBinding &b = bindingsM[deviceP];

@@ -47,6 +47,7 @@ struct cVtManualServer {
   int port;
   std::string name;
   int caps[VTSATIP_MEDIUM_COUNT]; // number of frontends per medium
+  std::vector<std::string> filters; // satellite positions this server may be used for ("S19.2E"), empty = all
 };
 
 struct cVtSatipConfig {

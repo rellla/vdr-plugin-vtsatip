@@ -25,7 +25,7 @@ public:
   int Ca() const { return 0; } int Sid() const { return 0; } const int *Caids() const { static int z[1] = {0}; return z; } int Rid() const { return 0; } int Frequency() const { return 0; } int Srate() const { return 0; }
   const char *Name() const { return ""; } tChannelID GetChannelID() const { return tChannelID(); }
 };
-class cSource { public: static char ToChar(int) { return 'S'; } const char *Description() const { return ""; } };
+class cSource { public: static char ToChar(int) { return 'S'; } static cString ToString(int) { return cString("S19.2E"); } const char *Description() const { return ""; } };
 class cSources { public: cSource *Get(int) { return NULL; } };
 extern cSources Sources;
 struct cPidHandle { int pid; int streams; int handle; int used; };

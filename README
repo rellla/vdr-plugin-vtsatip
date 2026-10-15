@@ -89,6 +89,14 @@ sind es beliebig viele Frontends für die mit -D erlaubten Systeme (so verhält
 sich ein einzelner -s wie bisher). Manuelle Einträge haben Vorrang vor
 gleichen UPnP-Funden und werden nie durch "byebye" entfernt.
 
+Satellitenposition: Hinter CAPS kann mit ':' eine Liste von Positionen
+stehen (Schreibweise wie in VDRs sources.conf), z. B.
+  -s 192.168.1.20|DVBS2-4:S19.2E,S13E|Octonet
+Der Server wird dann nur für Kanäle dieser Positionen verwendet. Das ist
+nützlich, wenn mehrere Server an verschiedenen Satelliten hängen. Ohne
+Filter nimmt der Server alle Positionen (die SAT>IP-Syntax src= kommt aus
+der sources.conf, nicht aus VDRs DiSEqC-Konfiguration).
+
 Jedes VDR-Gerät (-d) sucht sich beim Umschalten einen Server mit freiem
 Frontend für die Empfangsart (Sat/Terr/Kabel) und bleibt dabei, solange es
 auf diesem Server benutzt wird. Ist alles belegt, nimmt VDR ein anderes
