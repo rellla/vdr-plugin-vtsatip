@@ -65,6 +65,7 @@ struct cVtSatipConfig {
   std::string mcastInterface;        // address of the local interface used for multicast, empty = system choice
   bool realtime;
   int trace;
+  bool detached;                    // start with all devices detached (SVDRP ATTA/DETA)
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
   std::vector<cVtManualServer> servers; // all -s entries; host/port above are the first one
   int discovery;                      // 0 = off, 1 = on, -1 = automatic (on if no -s was given)
@@ -77,7 +78,7 @@ struct cVtSatipConfig {
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
     rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
-    realtime(true), trace(0), discovery(-1), ciExtension(false), ciRestart(true)
+    realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
         frontend[i] = ciSlot[i] = 0;

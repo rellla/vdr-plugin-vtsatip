@@ -223,3 +223,12 @@ SVDRP
 
 Lizenz: GPLv2 (siehe COPYING). Enthält Code aus dem satip-Plugin und der
 Idee/dem Ablauf des vtuner-ng-Daemons.
+
+SVDRP ATTA / DETA
+-----------------
+  svdrpsend plug vtsatip DETA [N]     Gerät N (ohne Nummer: alle) abkoppeln
+  svdrpsend plug vtsatip ATTA [N]     wieder ankoppeln
+Abgekoppelte Geräte geben ihren Server-Stream frei und bieten keine Quellen
+mehr an, z. B. damit ein anderer SAT>IP-Client die Frontends nutzen kann.
+Geräte, die gerade aufnehmen oder anzeigen, bleiben angekoppelt (Antwort 550).
+Mit -A / --detached startet das Plugin mit abgekoppelten Geräten.

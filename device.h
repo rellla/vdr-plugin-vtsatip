@@ -18,11 +18,16 @@ public:
   static void Shutdown(void);
   static cString GetStatus(void);
   static cVtSatipDevice *GetDevice(unsigned int indexP);
+  // SVDRP ATTA/DETA: device -1 = all; returns a message
+  static cString Attach(int indexP, bool attachP, int &replyCodeP);
+  bool Detached(void) const { return detachedM; }
 
 private:
   unsigned int indexM;
   static cMutex mutexDevicesS;
   cString deviceNameM;
+  std::atomic<bool> detachedM;
+  bool Detach(void);
   cChannel channelM;
   bool isOpenDvrM;
   int bytesDeliveredM;

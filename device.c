@@ -31,6 +31,7 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
   lastPmtM(0),
   lastMediumM(-1)
 {
+  detachedM = VtSatipConfig.detached;
   unsigned int bufsize = (unsigned int)VTSATIP_TSBUFFER_SIZE;
   bufsize -= (bufsize % TS_SIZE);
   vtinfo("creating device CardIndex=%d DeviceNumber=%d [vtsatip device %u]", CardIndex(), DeviceNumber(), indexM);
@@ -78,7 +79,7 @@ cVtSatipDevice *cVtSatipDevice::GetDevice(unsigned int indexP)
 cString cVtSatipDevice::GetInformation(void)
 {
   return cString::sprintf("vtSAT>IP device %u (CardIndex %d)%s\n  tuner: %s\n  overflows: %lu\n  section filters: %d\n  last channel: %s\n",
-                          indexM, CardIndex(), CiSlot() > 0 ? *cString::sprintf(" with CI slot %d", CiSlot()) : "",
+                          indexM, CardIndex(), CiSlot() > 0 ? *cString::sprintf(" with CI slot %d", CiSlot()) : (detachedM ? " (detached)" : ""),
                           tunerM ? *tunerM->GetInformation() : "-",
                           overflowsM, secHandlerM ? secHandlerM->Count() : 0,
                           channelM.GetChannelID() == tChannelID::InvalidID ? "none" : channelM.Name());
@@ -232,6 +233,8 @@ bool cVtSatipDevice::ProvidesSource(int sourceP) const
   // source descriptions starting with '0' disable the source for SAT>IP
   if (s && s->Description() && *(s->Description()) == '0')
      return false;
+  if (detachedM)
+     return false; // given back to the system (e.g. for another SAT>IP client)
   int medium = MediumOfSource(sourceP);
   // the delivery system must be enabled (-D) and a known server must have a frontend for it
   return medium >= 0 && SystemEnabled(medium) && cVtServers::Get()->Provides(medium, *cSource::ToString(sourceP));
@@ -339,6 +342,52 @@ bool cVtSatipDevice::IsTunedToTransponder(const cChannel *channelP) const
   return strcmp(channelM.Parameters(), channelP->Parameters()) == 0;
 }
 
+bool cVtSatipDevice::Detach(void)
+{
+  if (Receiving())
+     return false;
+  cMutexLock lock(&mutexDevicesS);
+  detachedM = true;
+  if (tunerM)
+     tunerM->Release();
+  cVtServers::Get()->Unassign((int)indexM);
+  channelM = cChannel();
+  return true;
+}
+
+cString cVtSatipDevice::Attach(int indexP, bool attachP, int &replyCodeP)
+{
+  int from = indexP < 0 ? 0 : indexP;
+  int to = indexP < 0 ? VtSatipConfig.devices - 1 : indexP;
+  if (to >= VtSatipConfig.devices || from < 0) {
+     replyCodeP = 501;
+     return "invalid device number";
+     }
+  int busy = 0, changed = 0;
+  for (int i = from; i <= to; ++i) {
+      cVtSatipDevice *d = GetDevice((unsigned int)i);
+      if (!d)
+         continue;
+      if (attachP) {
+         if (d->detachedM) {
+            d->detachedM = false;
+            ++changed;
+            }
+         }
+      else if (!d->detachedM) {
+         if (d->Detach())
+            ++changed;
+         else
+            ++busy;
+         }
+      }
+  if (busy) {
+     replyCodeP = 550;
+     return cString::sprintf("%d device(s) are receiving and stay attached", busy);
+     }
+  return cString::sprintf("%d device(s) %s", changed, attachP ? "attached" : "detached");
+}
+
 void cVtSatipDevice::SetPowerSaveMode(bool On)
 {
   if (On && VtSatipConfig.disconnectIdle && tunerM) {
@@ -365,7 +414,7 @@ bool cVtSatipDevice::HasLock(int timeoutMsP) const
 bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
 {
   (void)liveViewP;
-  if (!tunerM)
+  if (!tunerM || (detachedM && channelP))
      return false;
   if (!channelP) {
      tunerM->SetChannel(NULL);

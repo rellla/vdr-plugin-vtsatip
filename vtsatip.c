@@ -89,6 +89,7 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -p START-END, --portrange=START-END\n"
          "                           RTP/RTCP port range (default 45000-47000)\n"
          "  -r SIZE,  --rcvbuf=SIZE  RTP socket receive buffer in bytes (default 2097152)\n"
+         "  -A,       --detached     start with all devices detached (see SVDRP ATTA)\n"
          "  -N,       --nodisconnect do not tear down the stream when a device becomes idle\n"
          "  -R,       --norealtime   do not try to give the RTP threads realtime priority\n"
          "  -t MODE,  --trace=MODE   0 = off, 1 = log RTSP traffic and tuning\n";
@@ -223,11 +224,12 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "rcvbuf",       required_argument, NULL, 'r' },
     { "nodisconnect", no_argument,       NULL, 'N' },
     { "norealtime",   no_argument,       NULL, 'R' },
+    { "detached",     no_argument,       NULL, 'A' },
     { "trace",        required_argument, NULL, 't' },
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:QT:b:p:r:NRt:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:QT:b:p:r:NRAt:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -295,6 +297,9 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                break;
           case 'R':
                VtSatipConfig.realtime = false;
+               break;
+          case 'A':
+               VtSatipConfig.detached = true;
                break;
           case 't':
                VtSatipConfig.trace = atoi(optarg);
@@ -407,6 +412,12 @@ const char **cPluginVtSatip::SVDRPHelpPages(void)
     "    Print the known SAT>IP servers and the state of all vtsatip devices.",
     "SCAN\n"
     "    Search the network for SAT>IP servers now (UPnP).",
+    "ATTA [ <device> ]\n"
+    "    Attach the devices (or one device) to the SAT>IP servers again.",
+    "DETA [ <device> ]\n"
+    "    Detach the devices (or one device) and release their servers,\n"
+    "    e.g. to use the frontends with another client. Devices that are\n"
+    "    receiving stay attached.",
     "TRAC [ <mode> ]\n"
     "    Get or set the tracing mode (0 = off, 1 = on).",
     NULL
@@ -425,6 +436,17 @@ cString cPluginVtSatip::SVDRPCommand(const char *Command, const char *Option, in
         }
      discoverM->Rescan();
      return "scanning for SAT>IP servers";
+     }
+  if (strcasecmp(Command, "ATTA") == 0 || strcasecmp(Command, "DETA") == 0) {
+     int n = -1;
+     if (Option && *Option) {
+        n = atoi(Option);
+        if (n < 0 || (n == 0 && *Option != '0')) {
+           ReplyCode = 501;
+           return "invalid device number";
+           }
+        }
+     return cVtSatipDevice::Attach(n, strcasecmp(Command, "ATTA") == 0, ReplyCode);
      }
   if (strcasecmp(Command, "TRAC") == 0) {
      if (Option && *Option)
