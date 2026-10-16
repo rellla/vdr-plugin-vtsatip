@@ -115,6 +115,12 @@ several servers: the number applies to all servers.
 SVDRP: plug vtsatip SCAN    starts a new search at once
        plug vtsatip INFO    shows servers (busy/free) and devices
 Firewall: UDP 1900 (multicast) and the RTP ports (-p) must be reachable.
+Security (since 0.7.2): the device description is only fetched from the host
+that sent the SSDP announcement, i.e. the host in LOCATION must be the sender's
+IP address. Announcements that point elsewhere are ignored. A server with
+several addresses that announces a LOCATION with another address than the one
+it sends from must be entered by hand with -s. Discovery can be switched off
+with -u 0.
 
 CI/CAM (since 0.2.0)
 --------------------
@@ -265,6 +271,13 @@ Not included (deliberately)
 ---------------------------
  * The "CI TNR" extension (vendor specific, DVBViewer).
  * IPv6.
+ * DVB-S2X specific values (additional roll-offs, higher-order APSK) and the
+   DVB-C2 data slice / tuning frequency type (always sent as 0). DVB-T2 PLP and
+   system id, S2 multistream via the stream id of the channel and all values
+   VDR's channel data provides (see param.c) are sent.
+ * CI/CAM operation has been implemented following the x_pmt/x_ci
+   specification but could not be tested on real hardware yet. Reports are
+   welcome.
 
 Tuning tips
 -----------

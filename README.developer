@@ -193,6 +193,13 @@ server; entries expire with the max-age of the announcement. Manual servers (-s)
 win over discovered ones. No XML library: the small tag scanner is in
 discover.c.
 
+The datagram handler gets the sender address (recvfrom). A LOCATION whose host
+is not the sender's IP is ignored (HandleLocation), so a device on the LAN
+cannot make the plugin fetch from arbitrary hosts or announce a server on
+behalf of another one. The test starts a "rogue" announcement from 127.0.0.1
+pointing to 127.0.0.2 (tests/test_discover.cpp, fake_upnp.py listens on all
+addresses).
+
 8. Building and testing
 -----------------------
 The plugin builds like any VDR plugin (make in PLUGINS/src/vtsatip with the VDR

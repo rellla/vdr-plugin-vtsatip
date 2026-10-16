@@ -31,7 +31,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-threading.Thread(target=lambda: http.server.HTTPServer(("127.0.0.1", HTTP_PORT), H).serve_forever(), daemon=True).start()
+threading.Thread(target=lambda: http.server.HTTPServer(("0.0.0.0", HTTP_PORT), H).serve_forever(), daemon=True).start()
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

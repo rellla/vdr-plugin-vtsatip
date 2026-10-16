@@ -324,7 +324,7 @@ void cVtDiscover::SendSearch(void)
      vtdebug("M-SEARCH failed: %s", strerror(errno));
 }
 
-void cVtDiscover::HandleLocation(const cVtSsdpMessage &msgP)
+void cVtDiscover::HandleLocation(const cVtSsdpMessage &msgP, const std::string &senderP)
 {
   if (serversM->Known(msgP.uuid)) {
      serversM->Touch(msgP.uuid, msgP.maxAge);
@@ -338,6 +338,13 @@ void cVtDiscover::HandleLocation(const cVtSsdpMessage &msgP)
   int port;
   if (!SplitUrl(msgP.location, host, port, path))
      return;
+  // Only fetch descriptions from the device that sent the announcement, so
+  // that another host on the LAN cannot make us contact arbitrary addresses
+  // or register a server for somebody else.
+  if (host != senderP) {
+     vtdebug("ignoring LOCATION %s sent by %s (host does not match the sender)", msgP.location.c_str(), senderP.c_str());
+     return;
+     }
   if (!HttpGet(msgP.location, 3000, headers, body)) {
      vtdebug("cannot fetch the description %s", msgP.location.c_str());
      failedM[msgP.location] = now + 30000;
@@ -363,7 +370,7 @@ void cVtDiscover::HandleLocation(const cVtSsdpMessage &msgP)
      vtinfo("found SAT>IP server '%s' at %s:%d (%s)", desc.name.c_str(), host.c_str(), desc.rtspPort, desc.caps.c_str());
 }
 
-void cVtDiscover::HandleDatagram(const char *dataP)
+void cVtDiscover::HandleDatagram(const char *dataP, const std::string &senderP)
 {
   cVtSsdpMessage msg;
   if (!ParseSsdp(dataP, msg))
@@ -373,7 +380,7 @@ void cVtDiscover::HandleDatagram(const char *dataP)
         vtinfo("SAT>IP server %s said goodbye", msg.uuid.c_str());
      return;
      }
-  HandleLocation(msg);
+  HandleLocation(msg, senderP);
 }
 
 void cVtDiscover::Action(void)
@@ -414,11 +421,17 @@ void cVtDiscover::Action(void)
                   continue;
                char buf[2048];
                for (int k = 0; k < 16; ++k) {
-                   ssize_t len = recv(fds[i].fd, buf, sizeof(buf) - 1, MSG_DONTWAIT);
+                   struct sockaddr_in from;
+                   socklen_t fromLen = sizeof(from);
+                   memset(&from, 0, sizeof(from));
+                   ssize_t len = recvfrom(fds[i].fd, buf, sizeof(buf) - 1, MSG_DONTWAIT, (struct sockaddr *)&from, &fromLen);
                    if (len <= 0)
                       break;
                    buf[len] = 0;
-                   HandleDatagram(buf);
+                   char sender[INET_ADDRSTRLEN] = "";
+                   if (fromLen < sizeof(from) || from.sin_family != AF_INET || !inet_ntop(AF_INET, &from.sin_addr, sender, sizeof(sender)))
+                      continue;
+                   HandleDatagram(buf, sender);
                    }
                }
            }

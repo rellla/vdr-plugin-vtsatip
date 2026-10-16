@@ -62,8 +62,8 @@ private:
   bool OpenSockets(void);
   void CloseSockets(void);
   void SendSearch(void);
-  void HandleDatagram(const char *dataP);
-  void HandleLocation(const cVtSsdpMessage &msgP);
+  void HandleDatagram(const char *dataP, const std::string &senderP);
+  void HandleLocation(const cVtSsdpMessage &msgP, const std::string &senderP);
 protected:
   virtual void Action(void);
 public:

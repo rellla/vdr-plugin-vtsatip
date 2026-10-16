@@ -128,11 +128,19 @@ int main(int argc, char **argv) {
   }
 
   // byebye / alive through the NOTIFY listener
+  sleep(2); // let the second start-up M-SEARCH (sent after 1 s) and its answer pass first
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
   struct sockaddr_in to; memset(&to, 0, sizeof(to)); to.sin_family = AF_INET; to.sin_port = htons(notify); inet_pton(AF_INET, "127.0.0.1", &to.sin_addr);
   const char *bye = "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: urn:ses-com:device:SatIPServer:1\r\nNTS: ssdp:byebye\r\nUSN: uuid:11111111-2222-3333-4444-555555555555::urn:ses-com:device:SatIPServer:1\r\n\r\n";
   sendto(fd, bye, strlen(bye), 0, (struct sockaddr *)&to, sizeof(to));
   CHECK(WaitFor([&]{ return servers->Count() == 0; }, 3000), "byebye removes the server");
+  { // the description must come from the host that sent the announcement
+    const char *rogue = "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nCACHE-CONTROL: max-age=1800\r\nLOCATION: http://127.0.0.2:%d/desc.xml\r\nNT: urn:ses-com:device:SatIPServer:1\r\nNTS: ssdp:alive\r\nUSN: uuid:99999999-2222-3333-4444-555555555555::urn:ses-com:device:SatIPServer:1\r\n\r\n";
+    char rmsg[600]; snprintf(rmsg, sizeof(rmsg), rogue, (argc > 3 ? atoi(argv[3]) : 18089));
+    sendto(fd, rmsg, strlen(rmsg), 0, (struct sockaddr *)&to, sizeof(to));
+    usleep(1500000);
+    CHECK(servers->Count() == 0, "LOCATION pointing to another host than the sender is ignored");
+    }
   const char *alive = "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nCACHE-CONTROL: max-age=1800\r\nLOCATION: http://127.0.0.1:%d/desc.xml\r\nNT: urn:ses-com:device:SatIPServer:1\r\nNTS: ssdp:alive\r\nUSN: uuid:11111111-2222-3333-4444-555555555555::urn:ses-com:device:SatIPServer:1\r\n\r\n";
   char msg[600]; snprintf(msg, sizeof(msg), alive, (argc > 3 ? atoi(argv[3]) : 18089));
   sendto(fd, msg, strlen(msg), 0, (struct sockaddr *)&to, sizeof(to));

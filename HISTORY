@@ -1,6 +1,12 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-16: Version 0.7.2
+- UPnP: the device description is only fetched from the host that sent the
+  announcement (LOCATION host must match the sender), with a test.
+- README: limitations (S2X, C2 data slice, CI untested on hardware), security
+  note. New file README.developer.
+
 2026-10-16: Version 0.7.1
 - Copyright and license notices in all files (GPL-2.0-only), derivation from
   the SAT>IP plugin and vtuner-ng marked, new file AUTHORS.
