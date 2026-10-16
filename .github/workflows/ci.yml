@@ -1,0 +1,72 @@
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Continuous integration: runs on every pull request and on every push to
+# main (which includes merges).
+#  * tests:        unit/integration tests against a fake SAT>IP server and
+#                  the translation checks (script check and msgfmt -c)
+#  * build-vdr:    builds the plugin, including the .mo files, against the
+#                  real headers of several VDR releases, with compiler
+#                  warnings treated as failures
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests and translations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ gettext python3
+
+      - name: Syntax check of all sources (stand-in VDR headers)
+        run: bash tests/syntax_check.sh
+
+      - name: Translations complete (every tr() string translated)
+        run: python3 tests/check_po.py
+
+      - name: Translations compile (msgfmt -c)
+        run: |
+          for po in po/*.po; do
+            echo "== $po"
+            msgfmt -c --check-format --check-domain --statistics -o /dev/null "$po"
+          done
+
+      - name: Unit and integration tests
+        run: bash tests/run_tests.sh
+
+  build-vdr:
+    name: Build against VDR ${{ matrix.vdr }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        vdr: ["2.4.8", "2.6.9", "2.7.9", "2.8.3"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ make pkg-config git gettext
+
+      - name: Build plugin and translations
+        run: bash tests/build_vdr.sh "${{ matrix.vdr }}" "$RUNNER_TEMP/vdr-${{ matrix.vdr }}"

@@ -213,8 +213,19 @@ sources next to it). Without VDR installed:
                          the translation check
   tests/syntax_check.sh  compile check of all sources with the stub headers
 
+  tests/build_vdr.sh TAG builds the plugin against the real headers of one VDR
+                         release (clones it from GitHub, e.g. tests/build_vdr.sh
+                         2.8.3); compiler warnings fail the build and, if
+                         gettext is installed, the .mo files are built with
+                         msgfmt -c
+
 The stubs are not VDR: they only make the plugin compile. Always build against
 the real headers too (VDR >= 2.4).
+
+Continuous integration (.github/workflows/ci.yml): every pull request and every
+push to main runs the tests and translation checks (check_po.py and msgfmt -c)
+and builds the plugin against VDR 2.4.8, 2.6.9, 2.7.9 and 2.8.3. Add a release
+to the matrix there when a new VDR version comes out.
 
 Adding a setup option: common.h (field and default), vtconfig.c (SetupParse),
 setup.c/.h (menu item and Store), po/de_DE.po (texts), README, tests/test_cfg.cpp.
