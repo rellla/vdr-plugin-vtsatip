@@ -1,0 +1,225 @@
+vtsatip - developer notes
+=========================
+
+How the plugin works, how it implements SAT>IP and how it talks to VDR. For
+usage see README, for credits and license see AUTHORS.
+
+1. Big picture
+--------------
+
+    VDR core                          vtsatip                        SAT>IP server
+    --------                          -------                        -------------
+    cDevice API  <----------------->  cVtSatipDevice  (device.c)
+    (tuning, PIDs, filters,               |  tune/PID requests (non-blocking)
+     TS packets, CAM, EPG)                v
+                                      cVtTuner thread  (tuner.c)  --- RTSP/TCP ---> OPTIONS, SETUP,
+                                          |   one RTSP session                       PLAY, TEARDOWN
+                                          v
+                                      cVtReceiver thread (tuner.c) <-- RTP/RTCP --- UDP unicast,
+                                          |   ts packets                            multicast or
+                                          v                                         interleaved TCP
+                                      ring buffer + software section filters
+                                      (device.c, sectionfilter.c)  ---> back to VDR
+
+    cVtServers (servers.c) knows the servers and which device uses which
+    frontend; cVtDiscover (discover.c) fills it by UPnP/SSDP;
+    cMenuSetupVtSatip / cMenuVtSatipStats (setup.c) is the OSD.
+
+Each VDR device (-d N) is one cVtSatipDevice with its own tuner thread, its
+own receiver thread, its own RTSP connection and its own SAT>IP stream, so N
+devices need N frontends on the servers.
+
+Threads (per device, plus one global):
+  * VDR threads call into cVtSatipDevice (SetChannelDevice, SetPid, ...).
+    They never block on the network.
+  * Tuner thread (cVtTuner::Action): the only thread that sends RTSP
+    requests. Waits on a condition variable for requests, then does the
+    minimal RTSP work. Also sends keep-alives (OPTIONS) and rebuilds the session
+    after errors.
+  * Receiver thread (cVtReceiver::Action): reads RTP and RTCP, strips the RTP
+    header, hands whole TS packets to the device. SCHED_FIFO if allowed.
+  * Section handler thread (cVtSecHandler): runs the software section filters.
+  * Discovery thread (cVtDiscover::Action, one for the plugin).
+
+2. Files
+--------
+
+  vtsatip.c        plugin class: command line, SVDRP, setup glue, thread start
+  common.h         constants, cVtSatipConfig (all settings), logging macros
+  vtconfig.c       parsing of settings (CA IDs, CI slots, SIDs, setup.conf keys)
+  device.c/.h      cVtSatipDevice: the cDevice implementation
+  tuner.c/.h       cVtTuner (RTSP control) and cVtReceiver (RTP/RTCP input)
+  rtsp.c/.h        minimal blocking RTSP client incl. RTP-over-TCP framing
+  param.c/.h       channels.conf parameters -> SAT>IP query (from the satip plugin)
+  pat.c/.h         PAT parser and PMT PID cache (needed for the CI extension)
+  sectionfilter.*  software section filters for VDR's EIT/SDT/... filters
+  servers.c/.h     server list, frontend accounting, quirks bookkeeping
+  discover.c/.h    SSDP/UPnP discovery
+  setup.c/.h       setup menu and statistics page
+  tests/           stubs of the VDR headers, a fake SAT>IP server, test programs
+
+3. SAT>IP in a nutshell, and what vtsatip does
+----------------------------------------------
+
+SAT>IP (SAT>IP specification, "SAT>IP Protocol Specification" by SES Astra)
+streams MPEG-TS over RTP. Control is RTSP, one session = one frontend.
+
+  OPTIONS rtsp://server/                      liveness, also used as keep-alive
+  SETUP   rtsp://server/?src=1&freq=..&pol=..&msys=..&mtype=..&sr=..&fec=..&pids=none
+            -> Session: ID;timeout=N, com.ses.streamID: S, Transport: ...
+  PLAY    rtsp://server/stream=S?<changes>    start, and every later change
+  TEARDOWN rtsp://server/stream=S
+
+The query parameters (all from param.c / NormalizeParams in tuner.c):
+  src=      satellite position number, from the description of the source in
+            sources.conf (leading number), not from VDR's DiSEqC setup
+  fe=       force a frontend (option -f / setup menu)
+  freq pol msys mtype sr fec ro plts   tuning, DVB-S/S2; for terrestrial and
+            cable the matching parameters (bw, tmode, gi, ...)
+  pids=     the complete PID list ("none", "all", or "0,16,17,...")
+  addpids=, delpids=   incremental PID changes
+  x_pmt=, x_ci=        CI extension (see 5)
+
+NormalizeParams brings the query into the order and form vtuner-ng sends it
+(src, fe, freq, pol, msys, mtype, sr, fec, ro, plts) and adds fec/plts, because
+several servers reject a SETUP without them.
+
+Control flow, which is what makes switching fast (the same as in vtuner-ng):
+
+  first tuning of a device:   OPTIONS, SETUP (pids=none), PLAY (tuning + pids)
+  next channel, other transponder:   one PLAY with the new tuning + all PIDs
+  next channel, same transponder:    nothing (lock stays); only addpids/delpids
+  PID change:                        PLAY addpids/delpids at once, no timer
+  idle (disconnect-idle on):         TEARDOWN, frontend is free for others
+
+PIDs 0,16,17,18,19,20 (PAT, NIT, SDT, EIT, ...) are always requested. "Lock" is
+declared when the first real TS packet (PID != 0x1FFF) arrives, not by waiting
+for RTCP. Packets which arrive after a retune request but belong to the old
+transponder are dropped (accept flag + OnRetune(), which flushes the buffers).
+
+Signal values come from the RTCP APP packet "SES1" (RFC 3550 type 204): its text
+has "tuner=feID,level,lock,quality,..."; level 0..255 and quality 0..15 are
+scaled to VDR's 0..100 / dBm. Lost and reordered packets are counted from the
+RTP sequence numbers (cVtReceiver::ProcessRtp).
+
+Transports (SETUP "Transport" header):
+  unicast UDP     RTP/AVP;unicast;client_port=a-b
+  multicast       RTP/AVP;multicast  -> the server answers with destination,
+                  port and optionally source (SSM); the receiver joins the group
+  TCP             RTP/AVP/TCP;unicast;interleaved=0-1 -> RTP and RTCP arrive as
+                  "$"-framed data on the RTSP connection. cVtRtsp::Transact
+                  and cVtRtsp::Pump share one buffer under one mutex: the
+                  tuner thread reads while it waits for a response, the receiver
+                  thread otherwise.
+A server which refuses or ignores multicast/TCP is remembered (noMulticastM,
+noTcpM per server) and gets plain UDP unicast.
+
+4. Server quirks, handled generically
+-------------------------------------
+There is no table of device names. The tuner reacts to what a server does:
+  * refused request and the session ID has leading zeros -> retry without them
+    (cVtRtsp::Play)
+  * addpids/delpids refused -> send the complete list from now on (fullPidListM)
+  * retune refused inside a session -> TEARDOWN and a fresh SETUP/PLAY
+  * 503 on SETUP or PLAY (no free frontend) -> cVtTuner calls
+    cVtTunerSink::OnServerBusy; the device marks the server busy for 15 s
+    (cVtServers::MarkBusy) and moves to another server (Reassign)
+  * lock not reported -> irrelevant, lock comes from the first TS packet
+
+5. CI/CAM through the server (x_pmt / x_ci)
+-------------------------------------------
+Servers with a CI (Digital Devices OctopusNet, minisatip with CA) decrypt in
+the server if the stream is set up with x_pmt=<PMT PIDs>&x_ci=<slot>. vtsatip
+does not touch VDR's CAM layer for this; the device just claims to have an
+internal CAM (HasInternalCam) so VDR does not look for another one.
+
+  1. ProvidesChannel only takes an encrypted channel if one CA ID of the channel
+     is in the CA ID list of the device's CI slot (-c / -i / -S), and a server
+     with a CI exists (cVtServers::Provides(..., needCi)).
+  2. The PMT PID of the service is not known up front. The device feeds the
+     stream's PAT into cVtPatParser (CRC32-checked), which yields SID -> PMT PID.
+     Results are cached per source/transponder/SID (cVtPmtCache).
+  3. cVtTuner::SetPmt(pid) adds it to x_pmt (and to the PID list). Some servers
+     only attach the CI to a stream started with x_pmt, so the first time
+     the session is restarted once (ciRestart; -Q disables that). Another
+     service on the same transponder is just added to the x_pmt list.
+
+6. Interaction with VDR (cDevice)
+---------------------------------
+  ProvidesSource / ProvidesTransponder / ProvidesChannel
+        answer "can this device receive that?" without side effects. They check
+        the delivery system (-D), whether a known server has a free frontend of
+        that kind and, for sat, the satellite position filter; ProvidesChannel
+        also does the CI check and the "already tuned to this transponder"
+        logic VDR expects (needsDetachReceivers).
+  SetChannelDevice
+        builds the SAT>IP parameters (GetTransponderUrlParameters), picks the
+        server (cVtServers::Assign), computes x_pmt/x_ci and hands everything
+        to cVtTuner::SetChannel. It returns at once, it never waits for lock.
+  SetPid / OpenFilter / CloseFilter
+        update the wanted PID set of the tuner (see 3). OpenFilter creates a
+        cVtSecFilter; EIT & co. are cut out of the TS in software.
+  GetTSPacket
+        VDR polls this; it returns whole TS packets from the ring buffer that
+        the receiver thread (via OnTsData) fills. With the CI active, packets can
+        be passed through VDR's cam slot as usual.
+  HasLock / SignalStats / SignalStrength / SignalQuality
+        from the cVtTuner atomics, fed by RTCP.
+  ProvidesEIT, SetPowerSaveMode
+        EPG scan permission (setup) and release of the stream when idle.
+  Setup: SetupParse/SetupStore, the OSD menus use VDR's cMenuSetupPage and
+        cOsdMenu; settings in setup.conf override command-line values.
+  SVDRP: INFO, SCAN, ATTA, DETA, TRAC (vtsatip.c, SVDRPCommand).
+
+Locking rules worth knowing:
+  * cVtTuner::mutexM protects the requests from VDR (wanted params, PIDs,
+    PMTs) and is held only briefly; the tuner thread copies what it needs and
+    does the network work without it.
+  * cVtServers has its own mutex; it is the only place that knows which
+    device sits on which server.
+  * cVtReceiver::sockMutexM protects the sockets (they are replaced when a stream
+    goes multicast); changers go first (changersM) because pthread mutexes are
+    not fair and the receive loop would starve them.
+  * cVtRtsp::ioM serialises all reads on the RTSP socket (see TCP above).
+
+7. Server discovery (UPnP / SSDP)
+---------------------------------
+cVtDiscover sends M-SEARCH (ST: urn:ses-com:device:SatIPServer:1) to
+239.255.255.250:1900 every 60 s and listens for NOTIFY ssdp:alive/byebye. For a
+new LOCATION it fetches the description with a plain HTTP GET, reads
+friendlyName, modelName and X_SATIPCAP (e.g. "DVBS2-4,DVBT2-2" = frontends
+per system), plus the X-SATIP-RTSP-Port header. cVtServers::Update stores the
+server; entries expire with the max-age of the announcement. Manual servers (-s)
+win over discovered ones. No XML library: the small tag scanner is in
+discover.c.
+
+8. Building and testing
+-----------------------
+The plugin builds like any VDR plugin (make in PLUGINS/src/vtsatip with the VDR
+sources next to it). Without VDR installed:
+
+  tests/run_tests.sh     compiles everything against tests/stubs/vdr/* and
+                         runs: config parser, section filters, tuner against
+                         tests/fake_satip.py, CI flow, quirk modes
+                         (zeros nodelta notune busy mcast nomcast refusemcast
+                         tcp notcp refusetcp allpids lose), UPnP discovery and
+                         the translation check
+  tests/syntax_check.sh  compile check of all sources with the stub headers
+
+The stubs are not VDR: they only make the plugin compile. Always build against
+the real headers too (VDR >= 2.4).
+
+Adding a setup option: common.h (field and default), vtconfig.c (SetupParse),
+setup.c/.h (menu item and Store), po/de_DE.po (texts), README, tests/test_cfg.cpp.
+Texts shown in the OSD go through tr(); tests/check_po.py fails if a text is
+missing in po/de_DE.po. Log messages and SVDRP replies stay English.
+
+9. Where to look when something is wrong
+----------------------------------------
+  * -t 1 (or Tracing in the setup menu) logs every RTSP request and response and
+    each tuning decision to the syslog.
+  * "svdrpsend plug vtsatip INFO" shows servers (busy/free) and per device
+    session, lock, frontend, signal, rtp=/lost=/reordered= and the last params.
+  * The statistics page in the setup menu shows the same live.
+  * lost= growing with UDP: raise net.core.rmem_max and -r; with -T tcp
+    lost stays 0 but latency can grow.

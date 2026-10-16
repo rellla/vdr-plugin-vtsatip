@@ -274,6 +274,11 @@ Tuning tips
    The lost= counter in SVDRP INFO and the statistics page show whether it
    helped.
 
+Developer information
+---------------------
+See README.developer for how the plugin works internally and how it talks to
+VDR and the SAT>IP server.
+
 Authors, credits and license
 ----------------------------
 Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>.
