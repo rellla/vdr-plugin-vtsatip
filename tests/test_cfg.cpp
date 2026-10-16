@@ -1,3 +1,5 @@
+// Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+// SPDX-License-Identifier: GPL-2.0-only
 #include <vdr/tools.h>
 #include "common.h"
 int StubLogLevel = 0; cVtSatipConfig VtSatipConfig;

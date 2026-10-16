@@ -1,0 +1,46 @@
+vtsatip - authors and credits
+=============================
+
+Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+  Author and maintainer of vtsatip. The plugin was written with the help of
+  Claude (Anthropic), an AI assistant, under his direction.
+
+vtsatip builds on the work of others. Without them it would not exist:
+
+SAT>IP plugin for VDR
+  https://github.com/FireFlyVDR/vdr-plugin-satip
+  Originally written by Rolf Ahrenberg (https://github.com/rofafor/vdr-plugin-satip),
+  now maintained by the FireFlyVDR project. GPLv2.
+  Used in vtsatip: param.c/param.h (channel parameters -> SAT>IP URL
+  parameters) taken with small changes, the software section filter
+  (sectionfilter.c/.h) adapted, the overall structure of device, setup menu
+  and plugin class, and the collection of server quirks (reports from users
+  such as Christian Wick for the FRITZ!WLAN Repeater DVB-C and Dirk Wagner for
+  the Telestar Digibit R1, as credited in the HISTORY of that plugin).
+  The section reassembly follows the Linux dvb_demux code.
+
+vtuner-ng
+  https://github.com/joed74/vtuner-ng
+  Maintained by Jochen Dolze (joed74); the satip daemon is Copyright (C) 2014
+  mc.fishdish@gmail.com; vtuner-ng is based on vtuner by Honza Petrous
+  (Copyright (C) 2010-2012). GPLv2.
+  Used in vtsatip: the control flow (one persistent RTSP session, one PLAY
+  per retune with the complete PID list, standard PIDs, lock on the first TS
+  packet, dropping stale packets, realtime RTP thread) and the way the
+  SAT>IP query is built. No code was copied; the behaviour was reimplemented.
+
+VDR (Video Disk Recorder)
+  Klaus Schmidinger, https://www.tvdr.de - the plugin API, and the plugin
+  example Makefile this Makefile follows. GPLv2.
+
+SAT>IP protocol specification
+  SES Astra / the SAT>IP Consortium - the protocol and the x_pmt/x_ci CI
+  extension as implemented by Digital Devices (OctopusNet) and minisatip.
+
+License
+-------
+vtsatip is free software under the GNU General Public License version 2 as
+published by the Free Software Foundation (see COPYING). The code taken from
+the SAT>IP plugin and the behaviour taken from vtuner-ng are available under
+"version 2" without the "or later" option, so vtsatip is GPL-2.0-only as well
+and must not be relicensed to a later version.

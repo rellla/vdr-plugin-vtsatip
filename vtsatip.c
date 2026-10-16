@@ -1,10 +1,19 @@
 /*
- * vtsatip.c: A plugin for the Video Disk Recorder
+ * vtsatip.c: vtsatip - SAT>IP client plugin for the Video Disk Recorder
+ *
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+ *
+ * The structure follows the SAT>IP plugin for VDR (https://github.com/FireFlyVDR/vdr-plugin-satip),
+ * Copyright (C) Rolf Ahrenberg and contributors.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
  *
  * SAT>IP client with the behaviour of the vtuner-ng satip daemon, but
  * running inside VDR - no kernel module required.
- *
- * See the README file for copyright information.
  */
 
 #include <ctype.h>

@@ -1,8 +1,17 @@
 /*
- * param.c: vtsatip - channel parameters to SAT>IP URL parameters (taken from the SAT>IP plugin)
+ * param.c: vtsatip - channel parameters to SAT>IP URL parameters
  *
- * See the README file for copyright information and how to reach the author.
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
  *
+ * Taken from the SAT>IP plugin for VDR, with small changes.
+ * Portions Copyright (C) Rolf Ahrenberg and the contributors of the SAT>IP plugin
+ * for VDR (https://github.com/FireFlyVDR/vdr-plugin-satip).
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
  */
 
 #include <ctype.h>

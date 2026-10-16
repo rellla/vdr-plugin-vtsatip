@@ -1,8 +1,6 @@
 vtsatip - SAT>IP plugin for VDR with the behaviour of vtuner-ng
 ================================================================
 
-(Deutsche Version: README.de)
-
 What is it?
 -----------
 A VDR plugin which builds the SAT>IP client of vtuner-ng (the "satip" daemon)
@@ -276,5 +274,15 @@ Tuning tips
    The lost= counter in SVDRP INFO and the statistics page show whether it
    helped.
 
-License: GPLv2 (see COPYING). Contains code from the satip plugin and the
-idea/control flow of the vtuner-ng daemon.
+Authors, credits and license
+----------------------------
+Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>.
+
+vtsatip builds on the SAT>IP plugin for VDR by Rolf Ahrenberg and the
+FireFlyVDR project (param.c and the section filter, structure, server quirks),
+on the control flow of the satip daemon of vtuner-ng (Jochen Dolze, mc.fishdish,
+based on vtuner by Honza Petrous) and on VDR by Klaus Schmidinger. The details
+are in the file AUTHORS.
+
+License: GNU General Public License version 2 (GPL-2.0-only, see COPYING).
+The upstream projects allow "version 2" only, so "or later" does not apply.

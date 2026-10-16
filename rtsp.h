@@ -1,7 +1,17 @@
 /*
  * rtsp.h: vtsatip - minimal blocking RTSP client for SAT>IP
  *
- * Based on the RTSP handling of the vtuner-ng satip daemon.
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+ *
+ * The control flow follows the satip daemon of vtuner-ng (https://github.com/joed74/vtuner-ng),
+ * Copyright (C) 2014 mc.fishdish@gmail.com, maintained by Jochen Dolze;
+ * vtuner-ng is based on vtuner by Honza Petrous.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
  */
 
 #ifndef __VTSATIP_RTSP_H

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
 # Compile-only check of ALL plugin sources against the stand-in VDR headers
 # (device, plugin and menu classes cannot be run without a real VDR).
 cd "$(dirname "$0")/.." || exit 1

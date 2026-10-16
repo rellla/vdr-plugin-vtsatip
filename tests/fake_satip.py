@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
 """Tiny fake SAT>IP server for testing vtsatip (RTSP over TCP + RTP/RTCP over UDP)."""
 import socket, threading, time, struct, sys, re, os, signal
 

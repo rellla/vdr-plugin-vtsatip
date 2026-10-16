@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
 """Checks that every tr()/trNOOP() text of the sources is in the German translation and vice versa."""
 import re, glob, os, sys
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")

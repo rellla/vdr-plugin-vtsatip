@@ -1,11 +1,23 @@
 /*
- * common.h: vtsatip - SAT>IP plugin for the Video Disk Recorder
+ * common.h: vtsatip - common definitions and configuration
  *
- * Merges the SAT>IP client logic of "vtuner-ng" (satip daemon + kernel
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+ *
+ * The structure follows the SAT>IP plugin for VDR (https://github.com/FireFlyVDR/vdr-plugin-satip),
+ * Copyright (C) Rolf Ahrenberg and contributors.
+ * The behaviour follows the satip daemon of vtuner-ng (https://github.com/joed74/vtuner-ng),
+ * Copyright (C) 2014 mc.fishdish@gmail.com, maintained by Jochen Dolze;
+ * vtuner-ng is based on vtuner by Honza Petrous.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
+ *
+ * Merges the SAT>IP client logic of vtuner-ng (satip daemon + kernel
  * proxy driver) into an in-process VDR device, so no kernel module is
  * needed anymore.
- *
- * See the README file for copyright information.
  */
 
 #ifndef __VTSATIP_COMMON_H

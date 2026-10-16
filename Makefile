@@ -1,11 +1,18 @@
 #
 # Makefile for the vtsatip plugin
 #
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# Adapted from the Makefile of the SAT>IP plugin for VDR (Rolf Ahrenberg and
+# contributors), which follows the plugin example Makefile of VDR
+# (Klaus Schmidinger).
+#
+# SPDX-License-Identifier: GPL-2.0-only
+#
 
 # The official name of this plugin (used in -P vtsatip)
 PLUGIN = vtsatip
 
-VERSION = 0.7.0
+VERSION = 0.7.1
 
 ### The directory environment:
 

@@ -1,6 +1,14 @@
 /*
  * pat.h: vtsatip - PAT parser and PMT PID cache
  *
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
+ *
  * The CI extension of SAT>IP servers (x_pmt) needs the PID of the PMT of the
  * service to decrypt. The PAT is always part of the stream (standard PIDs), so
  * the plugin finds the PMT PID itself, independent of VDR internals.

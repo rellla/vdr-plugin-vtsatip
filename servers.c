@@ -1,5 +1,13 @@
 /*
  * servers.c: vtsatip - list of known SAT>IP servers (manual and discovered)
+ *
+ * Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation. See the file COPYING.
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
  */
 
 #include <ctype.h>

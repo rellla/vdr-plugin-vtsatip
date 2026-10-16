@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
 """Fake SAT>IP UPnP device: answers M-SEARCH on UDP and serves the device description over HTTP."""
 import socket, sys, threading, http.server
 

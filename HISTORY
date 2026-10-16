@@ -1,12 +1,16 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-16: Version 0.7.1
+- Copyright and license notices in all files (GPL-2.0-only), derivation from
+  the SAT>IP plugin and vtuner-ng marked, new file AUTHORS.
+
 2026-10-15: Version 0.7.0
 - Fixed server frontend per device in the setup menu.
 - pids=all option (-a, setup menu): request the whole transponder.
 - RTP packet counters (received, lost, reordered) in SVDRP INFO.
 - Statistics page in the setup menu.
-- README in English (README.de is the German version), translation check
+- README in English, translation check
   in the test suite.
 
 2026-10-15: Version 0.6.0

@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (C) 2026 Andreas Baierl <ichgeh@imkreisrum.de>
+# SPDX-License-Identifier: GPL-2.0-only
 # Builds and runs the unit/integration tests against stand-ins for the VDR headers
 # and a fake SAT>IP server. No VDR installation is needed.
 cd "$(dirname "$0")" || exit 1
