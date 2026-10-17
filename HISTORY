@@ -1,6 +1,11 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-17: Version 0.7.3
+- DeviceType shows the delivery system of the current tuning (DVB-S2, DVB-S,
+  DVB-T2, DVB-C ...) instead of "vtSAT>IP", so femon and scripts based on it
+  show something useful. Also: GitHub Actions CI, tests/build_vdr.sh.
+
 2026-10-16: Version 0.7.2
 - UPnP: the device description is only fetched from the host that sent the
   announcement (LOCATION host must match the sender), with a test.

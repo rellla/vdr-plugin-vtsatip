@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <string.h>
 #include <vector>
 #include <vdr/device.h>
 #include <vdr/tools.h>
@@ -49,6 +50,31 @@ static const int VtSatipStdPids[] = { 0, 16, 17, 18, 19, 20 };
 
 // mediums a SAT>IP server can deliver
 enum { VTSATIP_MEDIUM_SAT = 0, VTSATIP_MEDIUM_TERR = 1, VTSATIP_MEDIUM_CABLE = 2, VTSATIP_MEDIUM_COUNT = 3 };
+
+// Name of the delivery system for tools like femon ("DVB-S2"), taken from the
+// msys= value of the SAT>IP tuning parameters. If there is none, the best
+// system of the medium is named. Returns a static string.
+inline const char *VtSatipSystemName(const char *paramsP, int mediumP)
+{
+  static const struct { const char *msys; const char *name; } map[] = {
+    { "dvbs", "DVB-S" }, { "dvbs2", "DVB-S2" }, { "dvbt", "DVB-T" }, { "dvbt2", "DVB-T2" },
+    { "dvbc", "DVB-C" }, { "dvbc2", "DVB-C2" }, { "atsc", "ATSC" }, { NULL, NULL }
+  };
+  const char *m = paramsP ? strstr(paramsP, "msys=") : NULL;
+  if (m) {
+     m += 5;
+     size_t n = strcspn(m, "&");
+     for (int i = 0; map[i].msys; ++i)
+         if (strlen(map[i].msys) == n && strncmp(m, map[i].msys, n) == 0)
+            return map[i].name;
+     }
+  switch (mediumP) {
+    case VTSATIP_MEDIUM_SAT:   return "DVB-S2";
+    case VTSATIP_MEDIUM_TERR:  return "DVB-T2";
+    case VTSATIP_MEDIUM_CABLE: return "DVB-C";
+    default:                   return NULL;
+    }
+}
 #define VTSATIP_UNLIMITED 99
 
 // how the stream is delivered

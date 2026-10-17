@@ -85,6 +85,7 @@ private:
   int lastCiM;
   int lastPmtM;
   int lastMediumM;
+  std::atomic<const char *> typeM; // delivery system of the last tuning, e.g. "DVB-S2"
 
   explicit cVtSatipDevice(unsigned int indexP);
   cVtSatipDevice(const cVtSatipDevice &);

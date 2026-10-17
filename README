@@ -114,6 +114,10 @@ several servers: the number applies to all servers.
 
 SVDRP: plug vtsatip SCAN    starts a new search at once
        plug vtsatip INFO    shows servers (busy/free) and devices
+femon and other tools: the device type (DeviceType) is the delivery system of
+the last tuning, e.g. "DVB-S2", "DVB-S", "DVB-T2" or "DVB-C", like with a real
+DVB card (since 0.7.3). Before the first tuning it is the best enabled system.
+The device name still shows "vtSAT>IP <n> (<server>)".
 Firewall: UDP 1900 (multicast) and the RTP ports (-p) must be reachable.
 Security (since 0.7.2): the device description is only fetched from the host
 that sent the SSDP announcement, i.e. the host in LOCATION must be the sender's

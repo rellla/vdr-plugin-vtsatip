@@ -40,7 +40,8 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
   tunedSidM(0),
   lastCiM(0),
   lastPmtM(0),
-  lastMediumM(-1)
+  lastMediumM(-1),
+  typeM(NULL)
 {
   detachedM = VtSatipConfig.detached;
   unsigned int bufsize = (unsigned int)VTSATIP_TSBUFFER_SIZE;
@@ -203,6 +204,8 @@ void cVtSatipDevice::OnRetune(void)
      secHandlerM->Clear();
 }
 
+static bool SystemEnabled(int mediumP);
+
 // --- cDevice ------------------------------------------------------------------
 
 bool cVtSatipDevice::Ready(void)
@@ -212,7 +215,15 @@ bool cVtSatipDevice::Ready(void)
 
 cString cVtSatipDevice::DeviceType(void) const
 {
-  return "vtSAT>IP";
+  // femon and similar tools show this: the delivery system of the last tuning
+  // (like a DVB card), or the best enabled system before the first tuning.
+  const char *type = typeM.load();
+  if (!type) {
+     for (int medium = 0; medium < VTSATIP_MEDIUM_COUNT && !type; ++medium)
+         if (SystemEnabled(medium))
+            type = VtSatipSystemName(NULL, medium);
+     }
+  return type ? type : "SAT>IP";
 }
 
 cString cVtSatipDevice::DeviceName(void) const
@@ -497,6 +508,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
     lastCiM = ci;
     lastPmtM = pmt;
     lastMediumM = MediumOfSource(channelP->Source());
+    typeM = VtSatipSystemName(*params, lastMediumM);
   }
   tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
   return true;

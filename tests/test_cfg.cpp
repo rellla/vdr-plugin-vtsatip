@@ -36,4 +36,13 @@ int main(){
   CHECK(s.SetupParse("EnableEITScan", "0") && !s.eitScan && s.SetupParse("DisconnectIdle", "0") && !s.disconnectIdle && s.SetupParse("Trace", "1") && s.trace == 1 && s.SetupParse("CIRestart", "0") && !s.ciRestart, "setup: simple switches");
   CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7") && s.SetupParse("Transport", "2") && s.transport == VTSATIP_TRANSPORT_TCP, "setup: transport");
   CHECK(!s.SetupParse("Nonsense", "1"), "setup: unknown names are reported");
+  { // delivery system names shown by femon (DeviceType)
+    CHECK(strcmp(VtSatipSystemName("src=1&freq=11494&pol=h&ro=0.35&msys=dvbs2&mtype=8psk&sr=22000&fec=23", VTSATIP_MEDIUM_SAT), "DVB-S2") == 0, "type: DVB-S2");
+    CHECK(strcmp(VtSatipSystemName("src=1&freq=12544&pol=h&ro=0.35&msys=dvbs&mtype=qpsk&plts=off&sr=22000&fec=56", VTSATIP_MEDIUM_SAT), "DVB-S") == 0, "type: DVB-S (not mistaken for dvbs2)");
+    CHECK(strcmp(VtSatipSystemName("freq=506&bw=8&msys=dvbt2&tmode=32k&mtype=256qam&plp=0", VTSATIP_MEDIUM_TERR), "DVB-T2") == 0, "type: DVB-T2");
+    CHECK(strcmp(VtSatipSystemName("freq=330&msys=dvbc&mtype=256qam&sr=6900", VTSATIP_MEDIUM_CABLE), "DVB-C") == 0, "type: DVB-C");
+    CHECK(strcmp(VtSatipSystemName("msys=dvbc2", VTSATIP_MEDIUM_CABLE), "DVB-C2") == 0, "type: DVB-C2 at the end of the string");
+    CHECK(strcmp(VtSatipSystemName("freq=1", VTSATIP_MEDIUM_TERR), "DVB-T2") == 0 && strcmp(VtSatipSystemName(NULL, VTSATIP_MEDIUM_SAT), "DVB-S2") == 0, "type: no msys -> best system of the medium");
+    CHECK(VtSatipSystemName(NULL, -1) == NULL && VtSatipSystemName("msys=bogus", -1) == NULL, "type: unknown -> NULL");
+    }
   printf("%s\n", fails?"SOME TESTS FAILED":"ALL TESTS PASSED"); return fails; }
