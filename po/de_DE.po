@@ -113,3 +113,6 @@ msgstr "  %.1f Mbit/s, gesamt %.1f MB"
 
 msgid "  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"
 msgstr "  RTP-Pakete %lu, verloren %lu (%.2f%%), umsortiert %lu"
+
+msgid "  Longest pause between packets: %lu ms now, %lu ms since tuning"
+msgstr "  Längste Pause zwischen Paketen: %lu ms aktuell, %lu ms seit dem Tunen"

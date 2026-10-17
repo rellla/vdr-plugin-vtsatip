@@ -107,6 +107,8 @@ bool cVtSatipDevice::GetStats(unsigned indexP, cVtDeviceStats &statsP)
   statsP.packets = d->tunerM->Packets();
   statsP.lost = d->tunerM->PacketsLost();
   statsP.reordered = d->tunerM->PacketsReordered();
+  statsP.gapMs = d->tunerM->GapMs();
+  statsP.gapMaxMs = d->tunerM->GapMaxMs();
   cMutexLock statLock(&d->statMutexM);
   statsP.server = d->serverNameM;
   if (!(d->channelM.GetChannelID() == tChannelID::InvalidID))

@@ -255,7 +255,8 @@ setup values take precedence.
 Statistics page (since 0.7.0): per device the server, channel, lock state,
 signal strength and quality, transport (UDP/multicast/TCP), data rate and
 total, RTP packets, lost and reordered packets (with the loss in percent),
-followed by the known servers. The page refreshes once a second.
+the longest pause between two packets (now / since tuning), followed by the
+known servers. The page refreshes once a second.
 
 setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
 CISlotDevice0..n, FrontendDevice0..n, Discovery (-1/0/1), EnableEITScan,
@@ -266,7 +267,9 @@ Translations are in po/ (de_DE is provided); make creates the .mo files
 SVDRP
 -----
   plug vtsatip INFO       state of all devices; per device also rtp= (received
-                          RTP packets), lost= and reordered=
+                          RTP packets), lost= and reordered=, rate= (data rate
+                          of the last 2 s), gap= (longest pause between two
+                          packets in the last 2 s) and gapmax= (since tuning)
   plug vtsatip SCAN       search for servers now
   plug vtsatip ATTA|DETA  see above
   plug vtsatip TRAC 1     tracing on/off
@@ -290,6 +293,10 @@ Tuning tips
  * If packets are lost raise net.core.rmem_max, e.g. to 4194304, and set -r.
    The lost= counter in SVDRP INFO and the statistics page show whether it
    helped.
+ * Video buffer underruns without lost packets: look at gap= and gapmax= in
+   INFO (since 0.7.4). A pause of several hundred milliseconds means the server
+   or the network delivered the stream late, nothing the plugin can fix. Small
+   gaps and a steady rate= point to the video output instead.
 
 Developer information
 ---------------------

@@ -20,10 +20,12 @@
 #include <sched.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <algorithm>
 #include <map>
 #include <vector>
 #include <utility>
@@ -47,8 +49,81 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
   reorderedM(0),
   resetSeqM(false),
   seqValidM(false),
-  expectedSeqM(0)
+  expectedSeqM(0),
+  resetTimingM(false),
+  lastPacketUsM(0),
+  gapRecentUsM(0),
+  gapMaxUsM(0),
+  rateKbitM(0),
+  gapValidM(false),
+  prevPacketUsM(0),
+  windowStartUsM(0),
+  windowGapUsM(0),
+  windowBytesM(0)
 {
+}
+
+uint64_t cVtReceiver::NowUs(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+}
+
+// Called for every received packet: measures the data rate and the longest
+// pause between two packets, the usual reason for buffer underruns.
+void cVtReceiver::TrackTiming(int bytesP)
+{
+  uint64_t now = NowUs();
+  if (resetTimingM.exchange(false)) {
+     gapValidM = false; // the pause caused by a retune is not a gap
+     windowStartUsM = now;
+     windowGapUsM = 0;
+     windowBytesM = 0;
+     }
+  if (gapValidM) {
+     unsigned long gap = (unsigned long)(now - prevPacketUsM);
+     if (gap > windowGapUsM)
+        windowGapUsM = gap;
+     if (gap > gapMaxUsM.load())
+        gapMaxUsM = gap;
+     }
+  gapValidM = true;
+  prevPacketUsM = now;
+  lastPacketUsM = now ? now : 1;
+  windowBytesM += bytesP;
+  if (!windowStartUsM)
+     windowStartUsM = now;
+  else if (now - windowStartUsM >= 2000000) {
+     rateKbitM = (unsigned long)(windowBytesM * 8000ULL / (now - windowStartUsM));
+     gapRecentUsM = windowGapUsM;
+     windowStartUsM = now;
+     windowGapUsM = 0;
+     windowBytesM = 0;
+     }
+}
+
+// time since the last packet in microseconds, 0 if nothing arrived since the (re)tune
+static unsigned long VtSilenceUs(uint64_t nowP, uint64_t lastP)
+{
+  return (lastP && nowP > lastP) ? (unsigned long)(nowP - lastP) : 0;
+}
+
+unsigned long cVtReceiver::RateKbit(void) const
+{
+  return VtSilenceUs(NowUs(), lastPacketUsM.load()) > 3000000 ? 0 : rateKbitM.load();
+}
+
+unsigned long cVtReceiver::GapMs(void) const
+{
+  unsigned long silence = VtSilenceUs(NowUs(), lastPacketUsM.load());
+  return std::max(gapRecentUsM.load(), silence) / 1000;
+}
+
+unsigned long cVtReceiver::GapMaxMs(void) const
+{
+  unsigned long silence = VtSilenceUs(NowUs(), lastPacketUsM.load());
+  return std::max(gapMaxUsM.load(), silence) / 1000;
 }
 
 cVtReceiver::~cVtReceiver()
@@ -227,6 +302,7 @@ void cVtReceiver::ProcessRtp(const uchar *bufP, int lenP)
      }
   if (hdr >= lenP)
      return;
+  TrackTiming(lenP - hdr);
   if (hdr >= 12) { // a real RTP header: count lost and reordered packets
      unsigned seq = (unsigned)((bufP[2] << 8) | bufP[3]);
      ++packetsM;
@@ -910,8 +986,9 @@ cString cVtTuner::GetInformation(void)
   std::string pmt = wantPmtM.empty() ? std::string("-") : JoinPids(wantPmtM);
   int ci = wantCiSlotM;
   mutexM.Unlock();
-  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu rtp=%lu lost=%lu reordered=%lu pids=%zu ci=%d pmt=%s params=%s",
+  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu rtp=%lu lost=%lu reordered=%lu rate=%.2fMbit/s gap=%lums gapmax=%lums pids=%zu ci=%d pmt=%s params=%s",
                           sessionUpM.load() ? "up" : "down", (int)acceptM.load(), (int)lockM.load(),
                           frontendM.load(), strengthM.load(), qualityM.load(), bytesM.load(),
-                          receiverM.Packets(), receiverM.Lost(), receiverM.Reordered(), pids, ci, pmt.c_str(), params.c_str());
+                          receiverM.Packets(), receiverM.Lost(), receiverM.Reordered(),
+                          RateKbit() / 1000.0, GapMs(), GapMaxMs(), pids, ci, pmt.c_str(), params.c_str());
 }

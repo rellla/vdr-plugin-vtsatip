@@ -48,6 +48,9 @@ def sender(st, sock):
         time.sleep(0.005)
         if not st.started or not (st.client or st.mcast or st.tcp) or not st.pids or not st.freq:
             continue
+        if "stall" in FLAGS and st.seq > 200 and not getattr(st, "stalled", False):
+            st.stalled = True
+            time.sleep(1.3)  # simulate a server that stops sending for a moment
         data = st.packets()
         # at most 7 TS packets per datagram
         for i in range(0, len(data), 188 * 7):

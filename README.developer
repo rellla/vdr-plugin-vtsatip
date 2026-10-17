@@ -100,7 +100,11 @@ transponder are dropped (accept flag + OnRetune(), which flushes the buffers).
 Signal values come from the RTCP APP packet "SES1" (RFC 3550 type 204): its text
 has "tuner=feID,level,lock,quality,..."; level 0..255 and quality 0..15 are
 scaled to VDR's 0..100 / dBm. Lost and reordered packets are counted from the
-RTP sequence numbers (cVtReceiver::ProcessRtp).
+RTP sequence numbers (cVtReceiver::ProcessRtp). The same function times every
+packet (TrackTiming): the data rate and the longest pause between two packets
+over 2 s windows and since the (re)tune. A stall that is going on counts at
+once; the first packet after a retune does not (ResetSequence). These values
+are meant for finding out whether a video underrun comes from late delivery.
 
 Transports (SETUP "Transport" header):
   unicast UDP     RTP/AVP;unicast;client_port=a-b
@@ -209,7 +213,7 @@ sources next to it). Without VDR installed:
                          runs: config parser, section filters, tuner against
                          tests/fake_satip.py, CI flow, quirk modes
                          (zeros nodelta notune busy mcast nomcast refusemcast
-                         tcp notcp refusetcp allpids lose), UPnP discovery and
+                         tcp notcp refusetcp allpids lose stall), UPnP discovery and
                          the translation check
   tests/syntax_check.sh  compile check of all sources with the stub headers
 
@@ -237,7 +241,7 @@ missing in po/de_DE.po. Log messages and SVDRP replies stay English.
   * -t 1 (or Tracing in the setup menu) logs every RTSP request and response and
     each tuning decision to the syslog.
   * "svdrpsend plug vtsatip INFO" shows servers (busy/free) and per device
-    session, lock, frontend, signal, rtp=/lost=/reordered= and the last params.
+    session, lock, frontend, signal, rtp=/lost=/reordered=/rate=/gap=/gapmax= and the last params.
   * The statistics page in the setup menu shows the same live.
   * lost= growing with UDP: raise net.core.rmem_max and -r; with -T tcp
     lost stays 0 but latency can grow.

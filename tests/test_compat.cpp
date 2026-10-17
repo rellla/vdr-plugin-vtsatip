@@ -54,6 +54,18 @@ int main(int argc, char **argv) {
     CHECK(t.PacketsReordered() == 0, "nothing reordered");
     CHECK(strstr(*t.GetInformation(), "lost=") != NULL, "loss is part of the tuner information");
   }
+  else if (mode == "stall") {
+    t.SetChannel(TP1);
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return t.Packets() > 100 && t.RateKbit() > 0; }, 4000), "data rate is measured");
+    CHECK(WaitFor([&]{ return t.GapMaxMs() >= 1000; }, 6000), "a pause of 1.3 s shows up as the longest gap");
+    CHECK(t.GapMaxMs() < 3000, "and is not exaggerated");
+    CHECK(WaitFor([&]{ return t.GapMs() < 300; }, 8000), "the recent gap goes back to normal once the stream runs again");
+    CHECK(t.GapMaxMs() >= 1000, "the maximum since tuning is kept");
+    CHECK(strstr(*t.GetInformation(), "gapmax=") != NULL && strstr(*t.GetInformation(), "rate=") != NULL, "rate and gaps are part of the tuner information");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000) && t.GapMaxMs() < 500, "a retune starts the gap statistics afresh");
+  }
   else if (mode == "allpids") {
     t.SetChannel(TP1);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.HasPid(200) && sink.HasPid(100); }, 4000), "all PIDs arrive without asking for them");

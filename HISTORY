@@ -1,6 +1,11 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-18: Version 0.7.4
+- SVDRP INFO and the statistics page show the data rate and the longest pause
+  between two RTP packets (now and since tuning), to find out whether video
+  buffer underruns are caused by late delivery.
+
 2026-10-17: Version 0.7.3
 - DeviceType shows the delivery system of the current tuning (DVB-S2, DVB-S,
   DVB-T2, DVB-C ...) instead of "vtSAT>IP", so femon and scripts based on it

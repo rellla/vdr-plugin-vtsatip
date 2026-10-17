@@ -37,10 +37,12 @@ struct cVtDeviceStats {
   unsigned long packets;
   unsigned long lost;
   unsigned long reordered;
+  unsigned long gapMs;     // longest pause between two packets, last ~2 s
+  unsigned long gapMaxMs;  // since the tuning
   std::string server;
   std::string channel;
   cVtDeviceStats(void) : index(0), detached(false), session(false), lock(false), frontend(-1), strength(-1), quality(-1),
-                         transport(0), bytes(0), packets(0), lost(0), reordered(0) {}
+                         transport(0), bytes(0), packets(0), lost(0), reordered(0), gapMs(0), gapMaxMs(0) {}
 };
 
 class cVtSatipDevice : public cDevice, public cVtTunerSink {

@@ -54,6 +54,7 @@ void cMenuVtSatipStats::Fill(void)
          Add(new cOsdItem(*cString::sprintf(tr("  %.1f Mbit/s, total %.1f MB"), mbit, st.bytes / 1e6), osUnknown, false));
          double pct = (st.packets + st.lost) ? 100.0 * st.lost / (st.packets + st.lost) : 0;
          Add(new cOsdItem(*cString::sprintf(tr("  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"), st.packets, st.lost, pct, st.reordered), osUnknown, false));
+         Add(new cOsdItem(*cString::sprintf(tr("  Longest pause between packets: %lu ms now, %lu ms since tuning"), st.gapMs, st.gapMaxMs), osUnknown, false));
          }
       lastBytesM[i] = st.bytes;
       }

@@ -71,6 +71,19 @@ private:
   std::atomic<bool> resetSeqM;
   bool seqValidM;
   unsigned expectedSeqM;
+  // timing of the packets (the receiver thread writes, others read), microseconds
+  std::atomic<bool> resetTimingM;
+  std::atomic<uint64_t> lastPacketUsM;       // 0 = none since the (re)tune
+  std::atomic<unsigned long> gapRecentUsM;   // longest gap in the last completed window
+  std::atomic<unsigned long> gapMaxUsM;      // longest gap since the (re)tune
+  std::atomic<unsigned long> rateKbitM;      // data rate of the last completed window
+  bool gapValidM;
+  uint64_t prevPacketUsM;
+  uint64_t windowStartUsM;
+  unsigned long windowGapUsM;
+  unsigned long windowBytesM;
+  static uint64_t NowUs(void);
+  void TrackTiming(int bytesP);
   static void OnInterleaved(void *ctxP, int channelP, const uchar *dataP, int lengthP);
   void CloseSocketsLocked(void);
   void ProcessRtp(const uchar *bufP, int lenP);
@@ -85,7 +98,12 @@ public:
   bool OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP);
   void ResetUnicast(void) { Open(); }
   // forget the expected sequence number (new session or retune, the server may start a new numbering)
-  void ResetSequence(void) { resetSeqM = true; }
+  void ResetSequence(void) { resetSeqM = true; resetTimingM = true; lastPacketUsM = 0; gapMaxUsM = 0; gapRecentUsM = 0; rateKbitM = 0; }
+  // data rate (kbit/s) and longest gap between two packets (ms) in the last ~2 s and since the
+  // tuning; a stall that is going on now counts, so a stopped stream shows up at once
+  unsigned long RateKbit(void) const;
+  unsigned long GapMs(void) const;
+  unsigned long GapMaxMs(void) const;
   unsigned long Packets(void) const { return packetsM.load(); }
   unsigned long Lost(void) const { return lostM.load(); }
   unsigned long Reordered(void) const { return reorderedM.load(); }
@@ -180,6 +198,9 @@ public:
   unsigned long Packets(void) const { return receiverM.Packets(); }
   unsigned long PacketsLost(void) const { return receiverM.Lost(); }
   unsigned long PacketsReordered(void) const { return receiverM.Reordered(); }
+  unsigned long RateKbit(void) const { return sessionUpM.load() ? receiverM.RateKbit() : 0; }
+  unsigned long GapMs(void) const { return sessionUpM.load() ? receiverM.GapMs() : 0; }
+  unsigned long GapMaxMs(void) const { return sessionUpM.load() ? receiverM.GapMaxMs() : 0; }
   int TransportMode(void) const { return transportModeM.load(); }
   unsigned long Bytes(void) const { return bytesM.load(); }
   int FrontendId(void) const { return frontendM.load(); }
