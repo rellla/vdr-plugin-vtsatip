@@ -41,6 +41,10 @@ int main(){
     CHECK(s.SetupParse("IdleTimeout", "45") && s.idleTimeout == 45 && !s.SetupParse("IdleTimeout", "2") && !s.SetupParse("IdleTimeout", "99999") && s.idleTimeout == 45, "setup: idle timeout (5-3600 s)");
     CHECK(!VtSatipIdleExpired(100000, 90000, 20) && VtSatipIdleExpired(110000, 90000, 20) && VtSatipIdleExpired(150000, 90000, 20), "idle: expires after the timeout");
     CHECK(!VtSatipIdleExpired(1000, 5000, 20) && !VtSatipIdleExpired(200000, 0, 0), "idle: clock going back or timeout 0 never expires");
+    CHECK(!VtSatipStalled(true, 4999, 0, 5000) && VtSatipStalled(true, 5000, 0, 5000), "stall: no packet for the timeout");
+    CHECK(!VtSatipStalled(false, 0, 9999, 5000) && VtSatipStalled(false, 0, 10000, 5000), "stall: nothing at all is allowed twice the timeout");
+    CHECK(!VtSatipStalled(true, 100000, 0, 0) && !VtSatipStalled(false, 0, 100000, -1), "stall: timeout 0 switches the check off");
+    { cVtSatipConfig fresh; CHECK(fresh.stallTimeoutMs == 5000, "stall: default 5 s"); }
     }
   { // delivery system names shown by femon (DeviceType)
     CHECK(strcmp(VtSatipSystemName("src=1&freq=11494&pol=h&ro=0.35&msys=dvbs2&mtype=8psk&sr=22000&fec=23", VTSATIP_MEDIUM_SAT), "DVB-S2") == 0, "type: DVB-S2");

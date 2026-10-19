@@ -58,6 +58,16 @@ inline bool VtSatipIdleExpired(uint64_t nowMsP, uint64_t lastActiveMsP, int time
   return timeoutSecP > 0 && nowMsP >= lastActiveMsP && nowMsP - lastActiveMsP >= (uint64_t)timeoutSecP * 1000;
 }
 
+// A stream is dead when no packet arrived for the stall timeout, or when nothing at all
+// arrived within twice that time after the tuning (the server needs a moment to start).
+// Times in milliseconds; a timeout <= 0 switches the check off.
+inline bool VtSatipStalled(bool hadPacketP, uint64_t silenceMsP, uint64_t sinceTuneMsP, int timeoutMsP)
+{
+  if (timeoutMsP <= 0)
+     return false;
+  return hadPacketP ? silenceMsP >= (uint64_t)timeoutMsP : sinceTuneMsP >= 2 * (uint64_t)timeoutMsP;
+}
+
 // Name of the delivery system for tools like femon ("DVB-S2"), taken from the
 // msys= value of the SAT>IP tuning parameters. If there is none, the best
 // system of the medium is named. Returns a static string.
@@ -109,6 +119,7 @@ struct cVtSatipConfig {
   int portStop;
   bool disconnectIdle;
   int idleTimeout;        // seconds a device may stay unused before its stream is released
+  int stallTimeoutMs;     // a stream without data for this long is considered dead and is set up again (2x while waiting for the first packet)
   bool allPids;                      // request the whole transponder (pids=all) instead of a PID list
   bool eitScan;                      // let VDR use the devices for EPG scanning
   int transport;                     // VTSATIP_TRANSPORT_*
@@ -128,7 +139,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), stallTimeoutMs(5000), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)

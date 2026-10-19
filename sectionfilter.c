@@ -173,6 +173,7 @@ cVtSecHandler::cVtSecHandler(int indexP, int bufferLenP)
 : cThread(*cString::sprintf("vtsatip#%d sections", indexP)),
   ringM(new cRingBufferLinear(bufferLenP, TS_SIZE, false, *cString::sprintf("vtsatip %d sections", indexP))),
   countM(0),
+  clearM(false),
   indexM(indexP)
 {
   memset(filtersM, 0, sizeof(filtersM));
@@ -200,6 +201,8 @@ void cVtSecHandler::Action(void)
   while (Running()) {
         uchar *p;
         int len = 0;
+        if (clearM.exchange(false))
+           ringM->Clear();
         while (Running() && (p = ringM->Get(len)) != NULL) {
               if (len < TS_SIZE)
                  break;
@@ -299,5 +302,5 @@ void cVtSecHandler::Write(const uchar *bufP, int lenP)
 void cVtSecHandler::Clear(void)
 {
   if (ringM)
-     ringM->Clear();
+     clearM = true;
 }

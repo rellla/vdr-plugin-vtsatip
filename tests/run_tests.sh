@@ -31,7 +31,7 @@ for t in tuner ci; do
   wait $SRV 2>/dev/null
 done
 # server quirks, handled by generic fallbacks
-for mode in zeros nodelta notune busy mcast nomcast refusemcast tcp notcp refusetcp allpids lose stall; do
+for mode in zeros nodelta notune busy mcast nomcast refusemcast tcp notcp refusetcp allpids lose stall dead deadstart tcpdead; do
   PORT=$((20000 + RANDOM % 10000)); PORT2=$((PORT + 1))
   rm -f "$OUT/server.log"
   FAKE_MCAST_PORT=$((PORT + 100)) python3 fake_satip.py $PORT "$OUT/server.log" 30 $mode & SRV=$!

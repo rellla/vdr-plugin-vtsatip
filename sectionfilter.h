@@ -68,6 +68,7 @@ private:
   cMutex mutexM;
   cVtSecFilter *filtersM[eMaxFilters];
   std::atomic<int> countM;
+  std::atomic<bool> clearM;   // the ring buffer may only be cleared by the thread that reads it
   int indexM;
 protected:
   virtual void Action(void);
@@ -80,7 +81,7 @@ public:
   void Close(int handleP);
   int GetPid(int handleP);
   void Write(const uchar *bufP, int lenP);
-  void Clear(void);
+  void Clear(void);             // asks the handler thread to drop what is buffered
   int Count(void) const { return countM.load(); }
 };
 

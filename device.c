@@ -26,7 +26,10 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
 : indexM(indexP),
   deviceNameM(*cString::sprintf("vtSAT>IP %u", indexP)),
   channelM(),
+  channelNameM(),
+  channelValidM(false),
   isOpenDvrM(false),
+  clearTsM(false),
   bytesDeliveredM(0),
   checkTsBufferM(false),
   tsBufferM(NULL),
@@ -112,18 +115,32 @@ bool cVtSatipDevice::GetStats(unsigned indexP, cVtDeviceStats &statsP)
   statsP.gapMaxMs = d->tunerM->GapMaxMs();
   cMutexLock statLock(&d->statMutexM);
   statsP.server = d->serverNameM;
-  if (!(d->channelM.GetChannelID() == tChannelID::InvalidID))
-     statsP.channel = d->channelM.Name();
+  if (d->channelValidM)
+     statsP.channel = d->channelNameM;
   return true;
+}
+
+void cVtSatipDevice::SetChannelName(const cChannel *channelP)
+{
+  cMutexLock lock(&statMutexM);
+  channelValidM = channelP != NULL;
+  channelNameM = channelP ? channelP->Name() : std::string();
 }
 
 cString cVtSatipDevice::GetInformation(void)
 {
+  std::string channel;
+  bool channelValid;
+  {
+    cMutexLock lock(&statMutexM);
+    channel = channelNameM;
+    channelValid = channelValidM;
+  }
   return cString::sprintf("vtSAT>IP device %u (CardIndex %d)%s\n  tuner: %s\n  overflows: %lu\n  section filters: %d\n  last channel: %s\n",
                           indexM, CardIndex(), CiSlot() > 0 ? *cString::sprintf(" with CI slot %d", CiSlot()) : (detachedM ? " (detached)" : ""),
                           tunerM ? *tunerM->GetInformation() : "-",
                           overflowsM, secHandlerM ? secHandlerM->Count() : 0,
-                          channelM.GetChannelID() == tChannelID::InvalidID ? "none" : channelM.Name());
+                          channelValid ? channel.c_str() : "none");
 }
 
 cString cVtSatipDevice::GetStatus(void)
@@ -201,8 +218,10 @@ void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
 void cVtSatipDevice::OnRetune(void)
 {
   patM.Reset();
-  if (tsBufferM)
-     tsBufferM->Clear();
+  // Called by the tuner thread. A ring buffer may only be emptied by the thread that reads it
+  // (the tail is the reader's), so the readers are asked to do it: GetData() for the TS buffer,
+  // the section handler thread for its own.
+  clearTsM = true;
   if (secHandlerM)
      secHandlerM->Clear();
 }
@@ -404,6 +423,7 @@ bool cVtSatipDevice::Detach(void)
      tunerM->Release();
   cVtServers::Get()->Unassign((int)indexM);
   channelM = cChannel();
+  SetChannelName(NULL);
   return true;
 }
 
@@ -470,6 +490,7 @@ void cVtSatipDevice::SetPowerSaveMode(bool On)
      tunerM->Release();
      cVtServers::Get()->Unassign((int)indexM);
      channelM = cChannel();
+     SetChannelName(NULL);
      }
 }
 
@@ -527,6 +548,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
   patM.Reset();
   patWantedM = (ci > 0 && pmt == 0); // learn the PMT PID from the PAT
   channelM = *channelP;
+  SetChannelName(channelP);
   vtdebug("device %u: '%s' ci=%d pmt=%d", indexM, channelP->Name(), ci, pmt);
   {
     cMutexLock lock(&lastMutexM);
@@ -577,7 +599,9 @@ void cVtSatipDevice::CloseFilter(int handleP)
 
 bool cVtSatipDevice::OpenDvr(void)
 {
+  // nobody reads the buffer now, so it may be emptied here
   bytesDeliveredM = 0;
+  clearTsM = false;
   tsBufferM->Clear();
   isOpenDvrM = true;
   return true;
@@ -592,6 +616,10 @@ uchar *cVtSatipDevice::GetData(int *availableP, bool checkTsBufferP)
 {
   if (isOpenDvrM && tsBufferM) {
      int count = 0;
+     if (clearTsM.exchange(false)) {
+        tsBufferM->Clear();
+        bytesDeliveredM = 0;
+        }
      if (bytesDeliveredM) {
         tsBufferM->Del(bytesDeliveredM);
         bytesDeliveredM = 0;

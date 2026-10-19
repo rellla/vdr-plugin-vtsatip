@@ -66,9 +66,13 @@ private:
   std::atomic<bool> detachedM;
   bool Detach(void);
   void SetServerName(const std::string &nameP) { cMutexLock lock(&statMutexM); serverNameM = nameP; }
-  cChannel channelM;
-  bool isOpenDvrM;
+  cChannel channelM;            // only touched by VDR's threads that call the cDevice interface
+  std::string channelNameM;     // copy for the statistics and SVDRP, protected by statMutexM
+  bool channelValidM;
+  std::atomic<bool> isOpenDvrM;
+  std::atomic<bool> clearTsM;   // OnRetune() asks the reading thread (GetData) to drop the buffered data
   int bytesDeliveredM;
+  void SetChannelName(const cChannel *channelP);
   bool checkTsBufferM;
   cRingBufferLinear *tsBufferM;
   cVtSecHandler *secHandlerM;

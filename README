@@ -304,6 +304,11 @@ Tuning tips
    INFO (since 0.7.4). A pause of several hundred milliseconds means the server
    or the network delivered the stream late, nothing the plugin can fix. Small
    gaps and a steady rate= point to the video output instead.
+ * A stream that delivers nothing for 5 seconds (10 seconds right after
+   tuning) is set up again by the plugin (since 0.7.6); "the stream stalled"
+   in the log shows that it happened. On a channel without signal some servers
+   send nothing, so that message then repeats about every 10 seconds.
+ * If the log says that the receive buffer is limited, raise net.core.rmem_max.
 
 Developer information
 ---------------------

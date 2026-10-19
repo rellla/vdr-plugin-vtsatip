@@ -63,6 +63,23 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
 {
 }
 
+// The kernel silently limits the receive buffer to net.core.rmem_max. A small buffer
+// loses packets whenever the receiver thread is delayed, so say so once.
+static void SetReceiveBuffer(int fdP)
+{
+  static std::atomic<bool> warned(false);
+  int want = VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : 2 * 1024 * 1024;
+  setsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &want, sizeof(want));
+  int got = 0;
+  socklen_t len = sizeof(got);
+  if (getsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &got, &len) == 0) {
+     got /= 2; // Linux reports twice the usable size
+     vtdebug("receive buffer %d bytes (wanted %d)", got, want);
+     if (got < want && !warned.exchange(true))
+        vterror("the receive buffer is limited to %d bytes (wanted %d); raise net.core.rmem_max to avoid lost packets", got, want);
+     }
+}
+
 uint64_t cVtReceiver::NowUs(void)
 {
   struct timespec ts;
@@ -107,6 +124,16 @@ void cVtReceiver::TrackTiming(int bytesP)
 static unsigned long VtSilenceUs(uint64_t nowP, uint64_t lastP)
 {
   return (lastP && nowP > lastP) ? (unsigned long)(nowP - lastP) : 0;
+}
+
+bool cVtReceiver::SilenceMs(unsigned long &msP) const
+{
+  uint64_t last = lastPacketUsM.load();
+  if (!last)
+     return false;
+  uint64_t now = NowUs();
+  msP = now > last ? (unsigned long)((now - last) / 1000) : 0;
+  return true;
 }
 
 unsigned long cVtReceiver::RateKbit(void) const
@@ -180,8 +207,7 @@ bool cVtReceiver::Open(void)
          ok = (bind(rtcp, (struct sockaddr *)&a, sizeof(a)) == 0);
          }
       if (ok) {
-         int size = VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : 2 * 1024 * 1024;
-         setsockopt(rtp, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+         SetReceiveBuffer(rtp);
          rtpFdM = rtp;
          rtcpFdM = rtcp;
          rtpPortM = port;
@@ -248,8 +274,7 @@ bool cVtReceiver::OpenMulticast(const std::string &groupP, const std::string &so
             close(fds[i]);
      return false;
      }
-  int size = VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : 2 * 1024 * 1024;
-  setsockopt(fds[0], SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+  SetReceiveBuffer(fds[0]);
   rtpFdM = fds[0];
   rtcpFdM = fds[1];
   rtpPortM = rtpPortP;
@@ -430,6 +455,7 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
   tcpActiveM(false),
   failStatusM(0),
   keepAliveM(),
+  tuneStartM(),
   receiverM(*this),
   acceptM(false),
   lockM(false),
@@ -586,6 +612,16 @@ void cVtTuner::DropSession(void)
   strengthM = qualityM = -1;
   levelM = 0;
   frontendM = -1;
+}
+
+// The server may stop sending without a word (frontend lost, server restarted, connection
+// closed in TCP mode); the keep-alive does not notice that. Without a new session the
+// picture would stay black until the user switches channels.
+bool cVtTuner::StreamStalled(void)
+{
+  unsigned long silence = 0;
+  bool had = receiverM.SilenceMs(silence);
+  return VtSatipStalled(had, silence, tuneStartM.Elapsed(), VtSatipConfig.stallTimeoutMs);
 }
 
 void cVtTuner::DoRelease(void)
@@ -793,6 +829,7 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
   if (ka < eMinKeepAliveSec)
      ka = eMinKeepAliveSec;
   keepAliveM.Set(ka * 1000);
+  tuneStartM.Set();
   acceptM = true;
   return true;
 }
@@ -903,6 +940,14 @@ void cVtTuner::Action(void)
                  mutexM.Lock();
                  tunePendingM = !wantParamsM.empty();
                  }
+              continue;
+              }
+           if (StreamStalled()) {
+              vterror("device %d: the stream stalled (no data for %d ms), will retune", indexM, VtSatipConfig.stallTimeoutMs);
+              mutexM.Unlock();
+              DropSession();
+              mutexM.Lock();
+              tunePendingM = !wantParamsM.empty();
               continue;
               }
            if (keepAliveM.TimedOut()) {

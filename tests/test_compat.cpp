@@ -39,8 +39,10 @@ int main(int argc, char **argv) {
     VtSatipConfig.transport = VTSATIP_TRANSPORT_MULTICAST;
     VtSatipConfig.mcastInterface = "127.0.0.1";
   }
-  if (mode == "tcp" || mode == "notcp" || mode == "refusetcp")
+  if (mode == "tcp" || mode == "notcp" || mode == "refusetcp" || mode == "tcpdead")
     VtSatipConfig.transport = VTSATIP_TRANSPORT_TCP;
+  if (mode == "dead" || mode == "deadstart" || mode == "tcpdead")
+    VtSatipConfig.stallTimeoutMs = 800;
   if (mode == "allpids")
     VtSatipConfig.allPids = true;
   Sink sink; cVtTuner t(sink);
@@ -54,11 +56,33 @@ int main(int argc, char **argv) {
     CHECK(t.PacketsReordered() == 0, "nothing reordered");
     CHECK(strstr(*t.GetInformation(), "lost=") != NULL, "loss is part of the tuner information");
   }
+  else if (mode == "dead" || mode == "tcpdead") {
+    // the server stops sending but keeps the session; the keep-alive would never notice
+    t.SetChannel(TP1);
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.HasPid(100); }, 4000), "stream runs");
+    CHECK(WaitFor([&]{ return LogText("server.log").find("MUTED") != std::string::npos; }, 6000), "server went silent");
+    CHECK(WaitFor([&]{ return Count(LogText("server.log"), "REQ SETUP") == 2; }, 6000), "the watchdog sets up a new session");
+    unsigned long before = t.Bytes();
+    CHECK(WaitFor([&]{ return t.HasLock() && t.Bytes() > before + 5000; }, 4000), "data flows again");
+    CHECK(WaitFor([&]{ return sink.HasPid(100); }, 3000), "with the wanted PIDs");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 2, "and it stays at one new session");
+    t.SetChannel(TP2);
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune afterwards works");
+  }
+  else if (mode == "deadstart") {
+    // the server accepts the request but never sends anything
+    t.SetChannel(TP1);
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return Count(LogText("server.log"), "REQ SETUP") == 2; }, 6000), "a stream that never starts is set up again");
+    CHECK(WaitFor([&]{ return t.HasLock() && sink.HasPid(100); }, 4000), "and works the second time");
+  }
   else if (mode == "stall") {
     t.SetChannel(TP1);
     t.SetPid(100, true);
     CHECK(WaitFor([&]{ return t.Packets() > 100 && t.RateKbit() > 0; }, 4000), "data rate is measured");
     CHECK(WaitFor([&]{ return t.GapMaxMs() >= 1000; }, 6000), "a pause of 1.3 s shows up as the longest gap");
+    CHECK(Count(LogText("server.log"), "REQ SETUP") == 1, "a short pause does not restart the stream");
     CHECK(t.GapMaxMs() < 3000, "and is not exaggerated");
     CHECK(WaitFor([&]{ return t.GapMs() < 300; }, 8000), "the recent gap goes back to normal once the stream runs again");
     CHECK(t.GapMaxMs() >= 1000, "the maximum since tuning is kept");

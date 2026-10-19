@@ -106,6 +106,19 @@ over 2 s windows and since the (re)tune. A stall that is going on counts at
 once; the first packet after a retune does not (ResetSequence). These values
 are meant for finding out whether a video underrun comes from late delivery.
 
+Stall watchdog (cVtTuner::StreamStalled, tuner thread, checked once a second
+by the Action loop): a session without a packet for VtSatipConfig.stallTimeoutMs
+(5 s), or without any packet 2x that long after the tuning (tuneStartM), is
+dropped and tunePendingM makes the loop set it up again. The keep-alive cannot
+notice a server that just stops sending, and in TCP mode a closed connection
+is only seen by the receiver. Tests: fake server modes dead, deadstart and
+tcpdead (tests/fake_satip.py), VtSatipStalled in test_cfg.
+
+Buffers: cRingBufferLinear::Clear() moves the tail, which belongs to the reader.
+The tuner thread therefore only sets flags (OnRetune: clearTsM, and
+cVtSecHandler::Clear: clearM); GetData() and the section handler thread clear
+their buffers themselves.
+
 Transports (SETUP "Transport" header):
   unicast UDP     RTP/AVP;unicast;client_port=a-b
   multicast       RTP/AVP;multicast  -> the server answers with destination,

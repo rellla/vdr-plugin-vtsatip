@@ -7,7 +7,10 @@ import socket, threading, time, struct, sys, re, os, signal
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8554
 LOG = sys.argv[2] if len(sys.argv) > 2 else "server.log"
 TIMEOUT = int(sys.argv[3]) if len(sys.argv) > 3 else 30
-FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast tcp refusetcp
+FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast tcp refusetcp lose stall dead deadstart tcpdead
+if "tcpdead" in FLAGS:
+    FLAGS |= {"tcp", "dead"}   # dead: the first connection stops sending for good after a while
+conns = [0]
 MCAST_GROUP, MCAST_PORT = "239.255.77.7", int(os.environ.get("FAKE_MCAST_PORT", "5004"))
 lock = threading.Lock()
 
@@ -29,6 +32,7 @@ class Stream:
         self.tcp = False
         self.conn = None
         self.sendlock = threading.Lock()
+        self.first = False   # the first connection of the server
 
     def send(self, data):
         with self.sendlock:
@@ -47,6 +51,11 @@ def sender(st, sock):
     while st.alive:
         time.sleep(0.005)
         if not st.started or not (st.client or st.mcast or st.tcp) or not st.pids or not st.freq:
+            continue
+        if st.first and ("deadstart" in FLAGS or ("dead" in FLAGS and st.seq > 200)):
+            if not getattr(st, "muted", False):
+                st.muted = True
+                log("MUTED (stream stops, connection stays up)")
             continue
         if "stall" in FLAGS and st.seq > 200 and not getattr(st, "stalled", False):
             st.stalled = True
@@ -80,6 +89,8 @@ def sender(st, sock):
 def handle(conn, addr):
     st = Stream()
     st.conn = conn
+    st.first = conns[0] == 0
+    conns[0] += 1
     usock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton("127.0.0.1"))
     usock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_LOOP, 1)

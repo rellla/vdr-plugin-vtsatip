@@ -104,6 +104,8 @@ public:
   unsigned long RateKbit(void) const;
   unsigned long GapMs(void) const;
   unsigned long GapMaxMs(void) const;
+  // time since the last packet in ms; false if none arrived since the (re)tune
+  bool SilenceMs(unsigned long &msP) const;
   unsigned long Packets(void) const { return packetsM.load(); }
   unsigned long Lost(void) const { return lostM.load(); }
   unsigned long Reordered(void) const { return reorderedM.load(); }
@@ -155,6 +157,7 @@ private:
   std::set<std::string> noTcpM;       // servers which refused RTP over TCP
   int failStatusM;          // RTSP status of the last failed tuning
   cTimeMs keepAliveM;
+  cTimeMs tuneStartM;       // when the stream was last requested, for the stall check
   cVtReceiver receiverM;
   // status (read by other threads)
   std::atomic<bool> acceptM;
@@ -175,6 +178,7 @@ private:
               const std::string &hostP, int portP);
   bool DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP);
   void DoRelease(void);
+  bool StreamStalled(void);           // control thread: the stream delivers nothing any more
   void DropSession(void);
   void OnTsPayload(const uchar *dataP, int lenP);
   void OnRtcpInfo(const char *infoP);

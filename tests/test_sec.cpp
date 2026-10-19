@@ -47,6 +47,12 @@ int main() {
   Ts(buf + TS_SIZE, 18, false, 6, s3 + 183, 17);
   h.Write(buf, 2 * TS_SIZE);
   CHECK(Recv(fd, rx, 300) == 200, "section after cc jump still starts cleanly at PUSI");
+  // a retune empties the buffer, but the handler thread does it (the ring buffer's reader)
+  h.Clear();
+  usleep(300000);
+  Ts(buf, 18, true, 7, s1, 12);
+  h.Write(buf, TS_SIZE);
+  CHECK(Recv(fd, rx, 1000) == 12, "the handler keeps working after Clear()");
   h.Close(fd);
   CHECK(h.Count() == 1, "filter closed");
   printf("%s\n", fails ? "SOME TESTS FAILED" : "ALL TESTS PASSED");
