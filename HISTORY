@@ -1,6 +1,12 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-19: Version 0.7.5
+- Devices that are not used any more release their server frontend (TEARDOWN)
+  after 20 seconds (-I, setup menu "Release unused stream after"). VDR only
+  calls SetPowerSaveMode from the EPG scanner's pause, so streams used to stay
+  open until VDR was stopped. Done in MainThreadHook, once a second.
+
 2026-10-18: Version 0.7.4
 - SVDRP INFO and the statistics page show the data rate and the longest pause
   between two RTP packets (now and since tuning), to find out whether video

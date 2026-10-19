@@ -169,8 +169,17 @@ internal CAM (HasInternalCam) so VDR does not look for another one.
         be passed through VDR's cam slot as usual.
   HasLock / SignalStats / SignalStrength / SignalQuality
         from the cVtTuner atomics, fed by RTCP.
-  ProvidesEIT, SetPowerSaveMode
+  ProvidesEIT, SetPowerSaveMode, MainThreadHook
         EPG scan permission (setup) and release of the stream when idle.
+        VDR calls SetPowerSaveMode(true) only from the EPG scanner's pause
+        (cDevice::SetPowerSaveIfUnused), so it does not cover a device that is
+        simply not needed any more. The plugin's MainThreadHook runs once a
+        second (VDR main thread, like SetChannelDevice) and calls
+        cVtSatipDevice::IdleCheck: a device that is not receiving and not
+        occupied, and was not tuned for -I seconds (default 20), goes through
+        SetPowerSaveMode(true): tuner Release (TEARDOWN), server binding freed,
+        channel forgotten so IsTunedToTransponder() is false and the next
+        SetChannel retunes. VDR always calls SetChannelDevice for a switch.
   Setup: SetupParse/SetupStore, the OSD menus use VDR's cMenuSetupPage and
         cOsdMenu; settings in setup.conf override command-line values.
   SVDRP: INFO, SCAN, ATTA, DETA, TRAC (vtsatip.c, SVDRPCommand).

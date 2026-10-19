@@ -51,6 +51,13 @@ static const int VtSatipStdPids[] = { 0, 16, 17, 18, 19, 20 };
 // mediums a SAT>IP server can deliver
 enum { VTSATIP_MEDIUM_SAT = 0, VTSATIP_MEDIUM_TERR = 1, VTSATIP_MEDIUM_CABLE = 2, VTSATIP_MEDIUM_COUNT = 3 };
 
+// A device is released when it has not been in use (tuned, receiving or
+// occupied) for the idle timeout. Times in milliseconds.
+inline bool VtSatipIdleExpired(uint64_t nowMsP, uint64_t lastActiveMsP, int timeoutSecP)
+{
+  return timeoutSecP > 0 && nowMsP >= lastActiveMsP && nowMsP - lastActiveMsP >= (uint64_t)timeoutSecP * 1000;
+}
+
 // Name of the delivery system for tools like femon ("DVB-S2"), taken from the
 // msys= value of the SAT>IP tuning parameters. If there is none, the best
 // system of the medium is named. Returns a static string.
@@ -101,6 +108,7 @@ struct cVtSatipConfig {
   int portStart;
   int portStop;
   bool disconnectIdle;
+  int idleTimeout;        // seconds a device may stay unused before its stream is released
   bool allPids;                      // request the whole transponder (pids=all) instead of a PID list
   bool eitScan;                      // let VDR use the devices for EPG scanning
   int transport;                     // VTSATIP_TRANSPORT_*
@@ -120,7 +128,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)

@@ -10,6 +10,7 @@ public:
   virtual const char *CommandLineHelp() { return NULL; }
   virtual bool ProcessArgs(int, char **) { return true; }
   virtual bool Initialize() { return true; } virtual bool Start() { return true; } virtual void Stop() {}
+  virtual void MainThreadHook() {}
   virtual const char *MainMenuEntry() { return NULL; }
   virtual cMenuSetupPage *SetupMenu() { return NULL; }
   virtual bool SetupParse(const char *, const char *) { return false; }

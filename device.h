@@ -51,6 +51,7 @@ public:
   static bool Initialize(unsigned int deviceCountP);
   static void Shutdown(void);
   static cString GetStatus(void);
+  static void IdleCheckAll(void);   // main thread, about once a second: release unused streams
   static cVtSatipDevice *GetDevice(unsigned int indexP);
   // SVDRP ATTA/DETA: device -1 = all; returns a message
   static cString Attach(int indexP, bool attachP, int &replyCodeP);
@@ -87,6 +88,8 @@ private:
   int lastCiM;
   int lastPmtM;
   int lastMediumM;
+  std::atomic<uint64_t> lastActiveMsM; // last time the device was tuned, receiving or occupied
+  void IdleCheck(void);
   std::atomic<const char *> typeM; // delivery system of the last tuning, e.g. "DVB-S2"
 
   explicit cVtSatipDevice(unsigned int indexP);

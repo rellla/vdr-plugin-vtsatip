@@ -36,6 +36,12 @@ int main(){
   CHECK(s.SetupParse("EnableEITScan", "0") && !s.eitScan && s.SetupParse("DisconnectIdle", "0") && !s.disconnectIdle && s.SetupParse("Trace", "1") && s.trace == 1 && s.SetupParse("CIRestart", "0") && !s.ciRestart, "setup: simple switches");
   CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7") && s.SetupParse("Transport", "2") && s.transport == VTSATIP_TRANSPORT_TCP, "setup: transport");
   CHECK(!s.SetupParse("Nonsense", "1"), "setup: unknown names are reported");
+  { // release of unused streams
+    { cVtSatipConfig d; CHECK(d.idleTimeout == 20 && d.disconnectIdle, "idle: default 20 s, enabled"); }
+    CHECK(s.SetupParse("IdleTimeout", "45") && s.idleTimeout == 45 && !s.SetupParse("IdleTimeout", "2") && !s.SetupParse("IdleTimeout", "99999") && s.idleTimeout == 45, "setup: idle timeout (5-3600 s)");
+    CHECK(!VtSatipIdleExpired(100000, 90000, 20) && VtSatipIdleExpired(110000, 90000, 20) && VtSatipIdleExpired(150000, 90000, 20), "idle: expires after the timeout");
+    CHECK(!VtSatipIdleExpired(1000, 5000, 20) && !VtSatipIdleExpired(200000, 0, 0), "idle: clock going back or timeout 0 never expires");
+    }
   { // delivery system names shown by femon (DeviceType)
     CHECK(strcmp(VtSatipSystemName("src=1&freq=11494&pol=h&ro=0.35&msys=dvbs2&mtype=8psk&sr=22000&fec=23", VTSATIP_MEDIUM_SAT), "DVB-S2") == 0, "type: DVB-S2");
     CHECK(strcmp(VtSatipSystemName("src=1&freq=12544&pol=h&ro=0.35&msys=dvbs&mtype=qpsk&plts=off&sr=22000&fec=56", VTSATIP_MEDIUM_SAT), "DVB-S") == 0, "type: DVB-S (not mistaken for dvbs2)");

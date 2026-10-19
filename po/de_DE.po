@@ -30,6 +30,9 @@ msgstr "EPG-Scan erlauben"
 msgid "Disconnect idle streams"
 msgstr "Ungenutzte Streams trennen"
 
+msgid "Release unused stream after (s)"
+msgstr "Ungenutzten Stream freigeben nach (s)"
+
 msgid "Enable CI extension"
 msgstr "CI-Erweiterung verwenden"
 

@@ -85,6 +85,7 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
   discoveryM(VtSatipConfig.discovery + 1),
   eitScanM(VtSatipConfig.eitScan),
   disconnectIdleM(VtSatipConfig.disconnectIdle),
+  idleTimeoutM(VtSatipConfig.idleTimeout),
   allPidsM(VtSatipConfig.allPids),
   traceM(VtSatipConfig.trace ? 1 : 0),
   transportM(VtSatipConfig.transport),
@@ -119,6 +120,7 @@ void cMenuSetupVtSatip::Setup(void)
       Add(new cMenuEditIntItem(*cString::sprintf(tr("VDR device %d: server frontend"), i + 1), &frontendM[i], 0, VTSATIP_MAX_FRONTENDS, tr("auto")));
   Add(new cMenuEditBoolItem(tr("Enable EPG scanning"), &eitScanM));
   Add(new cMenuEditBoolItem(tr("Disconnect idle streams"), &disconnectIdleM));
+  Add(new cMenuEditIntItem(tr("Release unused stream after (s)"), &idleTimeoutM, 5, 3600));
   Add(new cMenuEditBoolItem(tr("Request all PIDs (pids=all)"), &allPidsM));
   Add(new cMenuEditBoolItem(tr("Enable CI extension"), &ciExtensionM));
   if (ciExtensionM) {
@@ -181,6 +183,7 @@ void cMenuSetupVtSatip::Store(void)
   VtSatipConfig.discovery = discoveryM - 1;
   VtSatipConfig.eitScan = eitScanM != 0;
   VtSatipConfig.disconnectIdle = disconnectIdleM != 0;
+  VtSatipConfig.idleTimeout = idleTimeoutM < 5 ? 5 : idleTimeoutM;
   VtSatipConfig.trace = traceM;
   VtSatipConfig.transport = transportM;
   SetupStore("Transport", VtSatipConfig.transport);
@@ -189,6 +192,7 @@ void cMenuSetupVtSatip::Store(void)
   SetupStore("Discovery", VtSatipConfig.discovery);
   SetupStore("EnableEITScan", eitScanM);
   SetupStore("DisconnectIdle", disconnectIdleM);
+  SetupStore("IdleTimeout", VtSatipConfig.idleTimeout);
   VtSatipConfig.allPids = allPidsM != 0;
   SetupStore("AllPids", allPidsM);
   SetupStore("Trace", traceM);

@@ -41,6 +41,7 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
   lastCiM(0),
   lastPmtM(0),
   lastMediumM(-1),
+  lastActiveMsM(cTimeMs::Now()),
   typeM(NULL)
 {
   detachedM = VtSatipConfig.detached;
@@ -439,6 +440,29 @@ cString cVtSatipDevice::Attach(int indexP, bool attachP, int &replyCodeP)
   return cString::sprintf("%d device(s) %s", changed, attachP ? "attached" : "detached");
 }
 
+void cVtSatipDevice::IdleCheck(void)
+{
+  if (!VtSatipConfig.disconnectIdle || detachedM || !tunerM || !tunerM->IsTuned())
+     return;
+  uint64_t now = cTimeMs::Now();
+  if (Receiving() || Occupied()) {
+     lastActiveMsM = now;
+     return;
+     }
+  if (VtSatipIdleExpired(now, lastActiveMsM.load(), VtSatipConfig.idleTimeout)) {
+     vtdebug("device %u: unused for %d s, releasing the stream", indexM, VtSatipConfig.idleTimeout);
+     SetPowerSaveMode(true);
+     }
+}
+
+void cVtSatipDevice::IdleCheckAll(void)
+{
+  cMutexLock lock(&mutexDevicesS);
+  for (unsigned int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
+      if (VtDevicesS[i])
+         VtDevicesS[i]->IdleCheck();
+}
+
 void cVtSatipDevice::SetPowerSaveMode(bool On)
 {
   if (On && VtSatipConfig.disconnectIdle && tunerM) {
@@ -496,6 +520,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
      ci = CiSlot();
      pmt = cVtPmtCache::Get(channelP->Source(), channelP->Transponder(), channelP->Sid());
      }
+  lastActiveMsM = cTimeMs::Now();
   tunedSourceM = channelP->Source();
   tunedTransponderM = channelP->Transponder();
   tunedSidM = channelP->Sid();

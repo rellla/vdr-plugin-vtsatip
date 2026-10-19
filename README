@@ -58,6 +58,8 @@ Usage / switching from vtuner-ng
   -a               request the whole transponder (pids=all), needs a lot of bandwidth
   -A               start with all devices detached (see SVDRP ATTA/DETA)
   -N               do not tear the stream down when a device becomes idle
+  -I SEC           release the stream of a device that was not used for SEC
+                   seconds (5-3600, default 20)
   -R               do not try realtime priority
   -t 1             tracing: RTSP traffic and tuning in the syslog
 
@@ -107,8 +109,11 @@ the server takes all positions.
 
 Every VDR device (-d) picks a server with a free frontend for the kind of
 reception (sat/terr/cable) when it is switched and stays there as long as it
-is used on that server. If everything is busy VDR uses another device. When
-idle the server is released again. A source is only available if a known
+is used on that server. If everything is busy VDR uses another device. A
+device that is not used any more (no recording, no live view, no tuning) for
+20 seconds (-I) gives its frontend back to the server (since 0.7.5; before
+that only the EPG scanner's pause did this). Switching back within that time
+is as fast as ever. A source is only available if a known
 server supplies the matching system. Be careful with -f (fixed frontends) and
 several servers: the number applies to all servers.
 
@@ -242,6 +247,8 @@ setup values take precedence.
                                server decides)
   Enable EPG scanning          use the devices for VDR's background EPG scan
   Disconnect idle streams      release the server frontend when idle
+  Release unused stream after  seconds without use before the frontend is
+                               released (5-3600, default 20)
   Request all PIDs             pids=all, see above
   Enable CI extension          shows, per VDR device, the CI slot, the CA IDs
                                ("0x1830,0x1843;0x0500"), the service IDs
@@ -260,7 +267,7 @@ known servers. The page refreshes once a second.
 
 setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
 CISlotDevice0..n, FrontendDevice0..n, Discovery (-1/0/1), EnableEITScan,
-DisconnectIdle, AllPids, Transport (0/1/2), Trace.
+DisconnectIdle, IdleTimeout, AllPids, Transport (0/1/2), Trace.
 Translations are in po/ (de_DE is provided); make creates the .mo files
 (gettext is needed), make install installs them.
 

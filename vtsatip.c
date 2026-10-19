@@ -57,6 +57,7 @@ public:
   virtual bool Initialize(void);
   virtual bool Start(void);
   virtual void Stop(void);
+  virtual void MainThreadHook(void);
   virtual const char *MainMenuEntry(void) { return NULL; }
   virtual cMenuSetupPage *SetupMenu(void);
   virtual bool SetupParse(const char *Name, const char *Value);
@@ -65,6 +66,18 @@ public:
   virtual const char **SVDRPHelpPages(void);
   virtual cString SVDRPCommand(const char *Command, const char *Option, int &ReplyCode);
 };
+
+// Called by VDR's main loop. VDR itself only puts a device into power save mode
+// from the EPG scanner's pause, so unused devices release their stream here.
+void cPluginVtSatip::MainThreadHook(void)
+{
+  static uint64_t last = 0;
+  uint64_t now = cTimeMs::Now();
+  if (now - last < 1000)
+     return;
+  last = now;
+  cVtSatipDevice::IdleCheckAll();
+}
 
 const char *cPluginVtSatip::CommandLineHelp(void)
 {
@@ -105,6 +118,8 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -a,       --allpids      request the whole transponder (pids=all), needs a lot of bandwidth\n"
          "  -A,       --detached     start with all devices detached (see SVDRP ATTA)\n"
          "  -N,       --nodisconnect do not tear down the stream when a device becomes idle\n"
+         "  -I SEC,   --idle=SEC     release the stream of a device that was not used for SEC seconds\n"
+         "                           (5-3600, default 20)\n"
          "  -R,       --norealtime   do not try to give the RTP threads realtime priority\n"
          "  -t MODE,  --trace=MODE   0 = off, 1 = log RTSP traffic and tuning\n";
 }
@@ -238,6 +253,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { "portrange",    required_argument, NULL, 'p' },
     { "rcvbuf",       required_argument, NULL, 'r' },
     { "nodisconnect", no_argument,       NULL, 'N' },
+    { "idle",         required_argument, NULL, 'I' },
     { "norealtime",   no_argument,       NULL, 'R' },
     { "allpids",      no_argument,       NULL, 'a' },
     { "detached",     no_argument,       NULL, 'A' },
@@ -245,7 +261,7 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
     { NULL,           no_argument,       NULL,  0  }
     };
   int c;
-  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:S:QT:b:p:r:NRAat:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "s:u:d:D:f:c:i:S:QT:b:p:r:NI:RAat:", long_options, NULL)) != -1) {
         switch (c) {
           case 's':
                if (!ParseServer(optarg)) {
@@ -318,6 +334,13 @@ bool cPluginVtSatip::ProcessArgs(int argc, char *argv[])
                break;
           case 'N':
                VtSatipConfig.disconnectIdle = false;
+               break;
+          case 'I':
+               if (atoi(optarg) < 5 || atoi(optarg) > 3600) {
+                  fprintf(stderr, "vtsatip: invalid idle time '%s' (5-3600 seconds)\n", optarg);
+                  return false;
+                  }
+               VtSatipConfig.idleTimeout = atoi(optarg);
                break;
           case 'R':
                VtSatipConfig.realtime = false;
