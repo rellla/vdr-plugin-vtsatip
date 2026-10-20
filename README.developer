@@ -238,6 +238,14 @@ sources next to it). Without VDR installed:
                          tcp notcp refusetcp allpids lose stall), UPnP discovery and
                          the translation check
   tests/syntax_check.sh  compile check of all sources with the stub headers
+  tests/run_soak.sh      long-running soak test (not in CI, 2 x 180 s by
+                         default): retunes, PID changes, section filters,
+                         releases, tuner delete/recreate and server restarts
+                         (SIGKILL) over UDP and RTP over TCP; fails on
+                         left-over file descriptors, growing memory or a
+                         stream that does not come back.
+                         SOAK_SECONDS=600 for a longer run, SANITIZE=1 to
+                         build with ASan/LSan/UBSan
 
   tests/build_vdr.sh TAG builds the plugin against the real headers of one VDR
                          release (clones it from GitHub, e.g. tests/build_vdr.sh
