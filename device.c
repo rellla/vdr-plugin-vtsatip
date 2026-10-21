@@ -383,12 +383,51 @@ bool cVtSatipDevice::HasInternalCam(void)
   return CiSlot() > 0;
 }
 
+// Kinds of reception (bit 1 << VTSATIP_MEDIUM_*) that a device of another plugin or a DVB card can scan the EPG for
+static int MediaScannedByOthers(void)
+{
+  int mask = 0;
+  for (int i = 0; i < cDevice::NumDevices(); ++i) {
+      cDevice *d = cDevice::GetDevice(i);
+      if (!d || dynamic_cast<cVtSatipDevice *>(d) || !d->ProvidesEIT())
+         continue;
+      for (cSource *s = Sources.First(); s; s = Sources.Next(s)) {
+          int medium = MediumOfSource(s->Code());
+          if (medium >= 0 && !(mask & (1 << medium)) && d->ProvidesSource(s->Code()))
+             mask |= 1 << medium;
+          }
+      }
+  return mask;
+}
+
+// Does the automatic mode want the SAT>IP devices to scan? The answer is cached: VDR's scanner asks for
+// every channel.
+static bool AutoEitWanted(void)
+{
+  static cMutex mutex;
+  static uint64_t stamp = 0;
+  static bool result = false;
+  cMutexLock lock(&mutex);
+  uint64_t now = cTimeMs::Now();
+  if (stamp && now - stamp < 5000)
+     return result;
+  int provided = 0;
+  for (int medium = 0; medium < VTSATIP_MEDIUM_COUNT; ++medium)
+      if (SystemEnabled(medium) && cVtServers::Get()->Provides(medium))
+         provided |= 1 << medium;
+  result = VtSatipUncoveredMedia(provided, MediaScannedByOthers());
+  stamp = now;
+  return result;
+}
+
 bool cVtSatipDevice::ProvidesEIT(void) const
 {
+  int setting = VtSatipEitSetting(indexM < VTSATIP_MAX_DEVICES ? VtSatipConfig.eitDevice[indexM] : -1, VtSatipConfig.eitScan);
+  bool allowed = VtSatipEitAllowed(setting, setting < 0 && AutoEitWanted());
 #if defined(APIVERSNUM) && APIVERSNUM < 20403
-  return VtSatipConfig.eitScan;
+  return allowed;
 #else
-  return VtSatipConfig.eitScan && DeviceHooksProvidesEIT();
+  return allowed && DeviceHooksProvidesEIT();
 #endif
 }
 
@@ -475,7 +514,7 @@ void cVtSatipDevice::IdleCheck(void)
      return;
      }
   if (VtSatipIdleExpired(now, lastActiveMsM.load(), VtSatipConfig.idleTimeout)) {
-     vtdebug("device %u: unused for %d s, releasing the stream", indexM, VtSatipConfig.idleTimeout);
+     vtinfo("device %u: unused for %d s, releasing the stream", indexM, VtSatipConfig.idleTimeout);
      SetPowerSaveMode(true);
      }
 }

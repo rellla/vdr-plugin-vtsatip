@@ -205,10 +205,16 @@ bool cVtSatipConfig::SetupParse(const char *nameP, const char *valueP)
         return false;
      frontend[device] = v;
      }
+  else if (!strncasecmp(nameP, "EpgScanDevice", 13)) {
+     int device = atoi(nameP + 13);
+     if (device < 0 || device >= VTSATIP_MAX_DEVICES)
+        return false;
+     eitDevice[device] = (v < 0) ? -1 : (v ? 1 : 0);
+     }
   else if (!strcasecmp(nameP, "Discovery"))
      discovery = (v < 0) ? -1 : (v ? 1 : 0);
   else if (!strcasecmp(nameP, "EnableEITScan"))
-     eitScan = v != 0;
+     eitScan = (v < 0) ? -1 : (v ? 1 : 0);
   else if (!strcasecmp(nameP, "DisconnectIdle"))
      disconnectIdle = v != 0;
   else if (!strcasecmp(nameP, "IdleTimeout")) {

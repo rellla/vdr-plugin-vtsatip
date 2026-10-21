@@ -1,6 +1,20 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-21: Version 0.7.8
+- EPG scanning of the SAT>IP devices is automatic by default: they take part
+  only if there is a kind of reception (sat, terrestrial, cable) provided by
+  the servers that no other device (local DVB card) scans the EPG for. With the old default
+  the EPG scanner took every free SAT>IP device, so a frontend of the server
+  was busy all the time and was released and set up again about every 20
+  seconds. "Enable EPG scanning" has the values automatic / no / yes now
+  (setup.conf: -1 / 0 / 1; old stored values stay as they are). README section
+  "EPG scan", which also explains how VDR's EPG scanner works (a step every
+  20 s, scanning all the time unless EPGPauseAfterScan is set).
+- EPG scanning can also be set per device ("VDR device N: EPG scanning",
+  setup.conf EpgScanDevice0..n: -1 = as the general setting, 0 = no, 1 = yes).
+- The release of an unused stream is logged at info level.
+
 2026-10-21: Version 0.7.7
 - Memory safety review (thanks to the reviewer on GitHub):
   - The device name (SVDRP LSTD, OSD) is read and written under a mutex; it

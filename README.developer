@@ -191,7 +191,14 @@ internal CAM (HasInternalCam) so VDR does not look for another one.
   HasLock / SignalStats / SignalStrength / SignalQuality
         from the cVtTuner atomics, fed by RTCP.
   ProvidesEIT, SetPowerSaveMode, MainThreadHook
-        EPG scan permission (setup) and release of the stream when idle.
+        EPG scan permission (setup: yes / no / automatic = only if a kind of
+        reception of the servers is not scanned by another device: the other
+        devices from cDevice::GetDevice() that ProvidesEIT() and ProvidesSource()
+        a source (from Sources) of that kind; cached for 5 s because VDR asks per
+        channel; VtSatipUncoveredMedia, VtSatipEitAllowed). VDR asks ProvidesEIT()
+        per device, not per transponder, so this cannot be finer than that;
+        a device's own setting (eitDevice, VtSatipEitSetting) wins over the general one
+        and release of the stream when idle.
         VDR calls SetPowerSaveMode(true) only from the EPG scanner's pause
         (cDevice::SetPowerSaveIfUnused), so it does not cover a device that is
         simply not needed any more. The plugin's MainThreadHook runs once a

@@ -46,7 +46,22 @@ int main(){
   CHECK(!s.SetupParse("CAIDs", "bogus") && s.caids[1][0] == 0x500, "setup: invalid CA IDs rejected");
   CHECK(s.SetupParse("CISlotDevice1", "2") && s.ciSlot[1] == 2 && !s.SetupParse("CISlotDevice1", "9") && s.ciSlot[1] == 2, "setup: CI slot per device");
   CHECK(s.SetupParse("Discovery", "-1") && s.UseDiscovery() && s.SetupParse("Discovery", "0") && !s.UseDiscovery() && s.SetupParse("Discovery", "1") && s.UseDiscovery(), "setup: discovery modes");
-  CHECK(s.SetupParse("EnableEITScan", "0") && !s.eitScan && s.SetupParse("DisconnectIdle", "0") && !s.disconnectIdle && s.SetupParse("Trace", "1") && s.trace == 1 && s.SetupParse("CIRestart", "0") && !s.ciRestart, "setup: simple switches");
+  CHECK(s.SetupParse("EnableEITScan", "0") && s.eitScan == 0 && s.SetupParse("DisconnectIdle", "0") && !s.disconnectIdle && s.SetupParse("Trace", "1") && s.trace == 1 && s.SetupParse("CIRestart", "0") && !s.ciRestart, "setup: simple switches");
+  CHECK(cVtSatipConfig().eitScan == -1, "EPG scan: automatic by default");
+  CHECK(VtSatipEitAllowed(1, true) && VtSatipEitAllowed(1, false) && !VtSatipEitAllowed(0, false) && !VtSatipEitAllowed(0, true), "EPG scan: yes and no are taken as they are");
+  CHECK(VtSatipEitAllowed(-1, true) && !VtSatipEitAllowed(-1, false), "EPG scan: automatic only if a kind of reception is left uncovered");
+  {
+    int sat = 1 << VTSATIP_MEDIUM_SAT, terr = 1 << VTSATIP_MEDIUM_TERR, cable = 1 << VTSATIP_MEDIUM_CABLE;
+    CHECK(!VtSatipUncoveredMedia(sat | cable, sat | cable) && !VtSatipUncoveredMedia(sat, sat | terr) && !VtSatipUncoveredMedia(0, 0), "EPG scan: all kinds covered by the local cards");
+    CHECK(VtSatipUncoveredMedia(sat | cable, sat) && VtSatipUncoveredMedia(sat, 0) && VtSatipUncoveredMedia(sat | terr, terr), "EPG scan: a kind without a local scanner is left to SAT>IP");
+  }
+  { cVtSatipConfig d;
+    CHECK(d.eitDevice[0] == -1 && VtSatipEitSetting(d.eitDevice[0], 0) == 0 && VtSatipEitSetting(d.eitDevice[0], -1) == -1, "EPG scan per device: follows the general setting by default");
+    CHECK(d.SetupParse("EpgScanDevice1", "1") && d.eitDevice[1] == 1 && VtSatipEitSetting(d.eitDevice[1], 0) == 1, "EPG scan per device: yes overrides a general no");
+    CHECK(d.SetupParse("EpgScanDevice2", "0") && d.eitDevice[2] == 0 && VtSatipEitSetting(d.eitDevice[2], 1) == 0, "EPG scan per device: no overrides a general yes");
+    CHECK(d.SetupParse("EpgScanDevice2", "-1") && d.eitDevice[2] == -1 && !d.SetupParse("EpgScanDevice99", "1"), "EPG scan per device: -1 goes back, bad device number rejected");
+  }
+  CHECK(s.SetupParse("EnableEITScan", "-1") && s.eitScan == -1 && s.SetupParse("EnableEITScan", "1") && s.eitScan == 1, "setup: EPG scan modes");
   CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7") && s.SetupParse("Transport", "2") && s.transport == VTSATIP_TRANSPORT_TCP, "setup: transport");
   CHECK(!s.SetupParse("Nonsense", "1"), "setup: unknown names are reported");
   { // release of unused streams

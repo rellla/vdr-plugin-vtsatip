@@ -25,8 +25,8 @@ public:
   int Ca() const { return 0; } int Sid() const { return 0; } const int *Caids() const { static int z[1] = {0}; return z; } int Rid() const { return 0; } int Frequency() const { return 0; } int Srate() const { return 0; }
   const char *Name() const { return ""; } tChannelID GetChannelID() const { return tChannelID(); }
 };
-class cSource { public: static char ToChar(int) { return 'S'; } static cString ToString(int) { return cString("S19.2E"); } const char *Description() const { return ""; } };
-class cSources { public: cSource *Get(int) { return NULL; } };
+class cSource { public: int Code() const { return 0; } static char ToChar(int) { return 'S'; } static cString ToString(int) { return cString("S19.2E"); } const char *Description() const { return ""; } };
+class cSources { public: cSource *Get(int) { return NULL; } cSource *First() { return NULL; } cSource *Next(const cSource *) { return NULL; } };
 extern cSources Sources;
 struct cPidHandle { int pid; int streams; int handle; int used; };
 class cCamSlot { public: bool CanDecrypt(const cChannel *) { return true; } bool WantsTsData() const { return false; } uchar *Decrypt(uchar *D, int &) { return D; } };
@@ -37,6 +37,7 @@ public:
   int CardIndex() const { return 0; } int DeviceNumber() const { return 0; }
   int Priority() const { return 0; } bool Receiving() const { return false; } int Occupied(int = 0) const { return 0; } bool HasPid(int) const { return false; }
   cCamSlot *CamSlot() const { return NULL; }
+  static int NumDevices() { return 0; } static cDevice *GetDevice(int) { return NULL; }
   void DetachAllReceivers() {} void Cancel(int = 0) {}
   virtual bool Ready() { return true; }
   virtual bool HasInternalCam() { return false; }
