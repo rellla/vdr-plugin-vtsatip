@@ -61,10 +61,11 @@ private:
   unsigned int indexM;
   static cMutex mutexDevicesS;
   cString deviceNameM;
-  cMutex statMutexM;
+  mutable cMutex statMutexM;
   std::string serverNameM;      // for the statistics
   std::atomic<bool> detachedM;
   bool Detach(void);
+  void SetDeviceName(const cString &nameP) { cMutexLock lock(&statMutexM); deviceNameM = nameP; }
   void SetServerName(const std::string &nameP) { cMutexLock lock(&statMutexM); serverNameM = nameP; }
   cChannel channelM;            // only touched by VDR's threads that call the cDevice interface
   std::string channelNameM;     // copy for the statistics and SVDRP, protected by statMutexM

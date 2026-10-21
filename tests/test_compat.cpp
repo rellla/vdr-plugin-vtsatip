@@ -70,6 +70,17 @@ int main(int argc, char **argv) {
     t.SetChannel(TP2);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000), "retune afterwards works");
   }
+  else if (mode == "hang") {
+    // the server accepts the connection and never answers: deleting the tuner must not wait for the timeouts
+    Sink sink2;
+    cVtTuner *tt = new cVtTuner(sink2);
+    tt->SetChannel(TP1);
+    CHECK(WaitFor([&]{ return Count(LogText("server.log"), "REQ OPTIONS") >= 1; }, 3000), "the tuner is waiting for the answer");
+    cTimeMs tm(0);
+    delete tt;
+    printf("   delete took %d ms\n", (int)tm.Elapsed());
+    CHECK(tm.Elapsed() < 1000, "deleting the tuner does not wait for the unresponsive server");
+  }
   else if (mode == "deadstart") {
     // the server accepts the request but never sends anything
     t.SetChannel(TP1);

@@ -1,6 +1,21 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-21: Version 0.7.7
+- Memory safety review (thanks to the reviewer on GitHub):
+  - The device name (SVDRP LSTD, OSD) is read and written under a mutex; it
+    was a cString reassigned while another thread could copy it.
+  - The service ID lists of the CI slots are guarded, so saving the setup
+    cannot disturb ProvidesChannel() running in another thread.
+  - discoverM (UPnP) is guarded against SVDRP SCAN running while the setup
+    switches discovery off.
+  - ~cVtSatipDevice detaches all receivers and stops the device thread before
+    it frees the buffers (VDR stops it only after the destructor).
+  - RTSP waits can be aborted: deleting a tuner no longer waits for the
+    timeouts of an unresponsive server (a forced thread cancel while the
+    thread still uses the objects is avoided). The final TEARDOWN still waits.
+- Tests: fake server mode "hang", concurrent SID list test.
+
 2026-10-19: Version 0.7.6
 - Stall watchdog: if a stream delivers no RTP for 5 seconds (10 seconds
   while waiting for the first packet after a tuning), the session is dropped

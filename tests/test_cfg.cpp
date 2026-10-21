@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <vdr/tools.h>
 #include "common.h"
+#include <atomic>
+#include <thread>
 int StubLogLevel = 0; cVtSatipConfig VtSatipConfig;
 static int fails=0;
 #define CHECK(c,m) do{ if(!(c)){printf("FAIL: %s\n",m);++fails;}else printf("ok:   %s\n",m);}while(0)
@@ -17,6 +19,17 @@ int main(){
     CHECK(strcmp(*c.SidsString(), "4911,5357;;7") == 0, "SID lists formatted back");
     CHECK(c.SlotProvidesCa(1, sidCh, 4911) && !c.SlotProvidesCa(1, sidCh, 1234) && c.SlotProvidesCa(1, sidCh, 0), "slot 1 restricted to its SIDs");
     CHECK(c.ParseCaIds("0x1830,0x1843;0x1843") && c.SlotProvidesCa(2, sidCh, 1234), "slot without SID list takes every service");
+    { // the setup menu replaces the lists while other threads ask (run under TSan/ASan to see the point)
+      std::atomic<bool> stop(false);
+      std::atomic<long> asked(0);
+      int ids[] = { 0x1830, 0 };
+      std::thread reader([&]{ while (!stop) { c.SlotProvidesCa(1, ids, 4911); (void)*c.SidsString(); ++asked; } });
+      for (int i = 0; i < 2000; ++i)
+          c.ParseSids(i % 2 ? "4911,0x14ed;;7" : "1,2,3,4,5,6,7,8;9");
+      stop = true;
+      reader.join();
+      CHECK(asked > 0, "SID lists can be replaced while they are read");
+    }
     CHECK(!c.ParseSids("abc") && !c.ParseSids("0") && c.sids[0].size() == 2, "invalid SID list rejected, old value kept");
     CHECK(c.ParseSids("") && c.sids[0].empty(), "empty list clears the restriction");
     c.ParseCaIds("0x1830,0x1843;0x0500");
