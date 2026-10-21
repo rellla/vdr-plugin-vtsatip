@@ -43,6 +43,7 @@ class cVtRtsp {
 private:
   enum { eMaxResponse = 4096 };
   int fdM;
+  std::atomic<bool> abortM;
   cString hostM;
   int portM;
   int cseqM;
@@ -77,6 +78,9 @@ public:
   bool Connect(const char *hostP, int portP, int timeoutMsP = 3000);
   void Close(void);
   bool IsOpen(void) const { return fdM >= 0; }
+  // Makes every wait for the server give up within ~100 ms (shutdown); SetAbort(false) allows
+  // waiting again, e.g. for the final TEARDOWN.
+  void SetAbort(bool abortP) { abortM = abortP; }
   bool HasSession(void) const { return streamIdM >= 0; }
   int StreamId(void) const { return streamIdM; }
   int SessionTimeout(void) const { return timeoutS; }

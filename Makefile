@@ -12,7 +12,7 @@
 # The official name of this plugin (used in -P vtsatip)
 PLUGIN = vtsatip
 
-VERSION = 0.7.6
+VERSION = 0.7.7
 
 ### The directory environment:
 

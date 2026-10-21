@@ -35,6 +35,7 @@ static cString HostPart(const char *hostP, int portP)
 
 cVtRtsp::cVtRtsp(void)
 : fdM(-1),
+  abortM(false),
   hostM(""),
   portM(VTSATIP_DEFAULT_RTSP_PORT),
   cseqM(1),
@@ -89,13 +90,24 @@ bool cVtRtsp::WaitFd(short eventsP, int timeoutMsP)
   pfd.fd = fdM;
   pfd.events = eventsP;
   pfd.revents = 0;
-  int r;
-  do {
-     r = poll(&pfd, 1, timeoutMsP);
-     } while (r < 0 && errno == EINTR);
-  if (r <= 0)
-     return false;
-  return (pfd.revents & eventsP) != 0;
+  // wait in slices so that SetAbort() takes effect quickly
+  int left = timeoutMsP < 0 ? 0 : timeoutMsP;
+  for (;;) {
+      if (abortM.load())
+         return false;
+      int slice = left < 100 ? left : 100;
+      int r = poll(&pfd, 1, slice);
+      if (r < 0) {
+         if (errno == EINTR)
+            continue;
+         return false;
+         }
+      if (r > 0)
+         return (pfd.revents & eventsP) != 0;
+      left -= slice;
+      if (left <= 0)
+         return false;
+      }
 }
 
 bool cVtRtsp::Connect(const char *hostP, int portP, int timeoutMsP)

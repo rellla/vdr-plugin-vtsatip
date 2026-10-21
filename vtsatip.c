@@ -43,6 +43,7 @@ static class cPluginVtSatip *PluginInstance = NULL;
 class cPluginVtSatip : public cPlugin {
 private:
   cVtDiscover *discoverM;
+  cMutex discoverMutexM;   // discoverM is created and deleted by the main thread, SVDRP SCAN uses it
   bool ParseServer(const char *paramP);
   bool ParseSystems(const char *paramP);
   void ParseFrontends(const char *paramP);
@@ -399,6 +400,7 @@ bool cPluginVtSatip::Initialize(void)
 
 bool cPluginVtSatip::Start(void)
 {
+  cMutexLock lock(&discoverMutexM);
   if (VtSatipConfig.UseDiscovery() && !discoverM) {
      discoverM = new cVtDiscover();
      discoverM->Start();
@@ -408,8 +410,11 @@ bool cPluginVtSatip::Start(void)
 
 void cPluginVtSatip::Stop(void)
 {
-  if (discoverM)
-     discoverM->Stop();
+  {
+    cMutexLock lock(&discoverMutexM);
+    if (discoverM)
+       discoverM->Stop();
+  }
   cVtSatipDevice::Shutdown();
 }
 
@@ -425,6 +430,7 @@ bool cPluginVtSatip::SetupParse(const char *Name, const char *Value)
 
 void cPluginVtSatip::RescanServers(void)
 {
+  cMutexLock lock(&discoverMutexM);
   if (discoverM)
      discoverM->Rescan();
 }
@@ -432,6 +438,7 @@ void cPluginVtSatip::RescanServers(void)
 // called after the setup was stored: start or stop the UPnP discovery
 void cPluginVtSatip::ApplySetup(void)
 {
+  cMutexLock lock(&discoverMutexM);
   if (VtSatipConfig.UseDiscovery() && !discoverM) {
      discoverM = new cVtDiscover();
      discoverM->Start();
@@ -480,6 +487,7 @@ cString cPluginVtSatip::SVDRPCommand(const char *Command, const char *Option, in
   if (strcasecmp(Command, "INFO") == 0)
      return cString::sprintf("%s%s", *cVtServers::Get()->Info(), *cVtSatipDevice::GetStatus());
   if (strcasecmp(Command, "SCAN") == 0) {
+     cMutexLock lock(&discoverMutexM);
      if (!discoverM) {
         ReplyCode = 550;
         return "UPnP discovery is not enabled";

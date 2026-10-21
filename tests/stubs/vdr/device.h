@@ -37,6 +37,7 @@ public:
   int CardIndex() const { return 0; } int DeviceNumber() const { return 0; }
   int Priority() const { return 0; } bool Receiving() const { return false; } int Occupied(int = 0) const { return 0; } bool HasPid(int) const { return false; }
   cCamSlot *CamSlot() const { return NULL; }
+  void DetachAllReceivers() {} void Cancel(int = 0) {}
   virtual bool Ready() { return true; }
   virtual bool HasInternalCam() { return false; }
   virtual cString DeviceType() const { return ""; }

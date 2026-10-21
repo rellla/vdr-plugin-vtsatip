@@ -475,6 +475,7 @@ cVtTuner::cVtTuner(cVtTunerSink &sinkP)
 
 cVtTuner::~cVtTuner()
 {
+  rtspM.SetAbort(true); // a tune in progress must not wait for a dead server
   mutexM.Lock();
   wantReleaseM = true;
   tunePendingM = false;
@@ -973,6 +974,7 @@ void cVtTuner::Action(void)
         condM.TimedWait(mutexM, eIdlePollMs);
         }
   mutexM.Unlock();
+  rtspM.SetAbort(false); // but the TEARDOWN may take its (short) time
   DropSession();
   vtdebug("device %d: tuner thread stopped", indexM);
 }

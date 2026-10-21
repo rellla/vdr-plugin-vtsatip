@@ -16,6 +16,10 @@
 #include <strings.h>
 #include "common.h"
 
+// SidsMutex: ParseSids() runs on the main thread (setup, command line) while ProvidesChannel() asks
+// SlotProvidesCa() from any thread.
+static cMutex SidsMutex;
+
 bool cVtSatipConfig::ParseCaIds(const char *strP)
 {
   int tmp[VTSATIP_MAX_CI_SLOTS][VTSATIP_MAX_CAIDS + 1];
@@ -132,6 +136,7 @@ bool cVtSatipConfig::ParseSids(const char *strP)
   free(buf);
   if (!ok)
      return false;
+  cMutexLock lock(&SidsMutex);
   for (int i = 0; i < VTSATIP_MAX_CI_SLOTS; ++i)
       sids[i] = tmp[i];
   return true;
@@ -139,6 +144,7 @@ bool cVtSatipConfig::ParseSids(const char *strP)
 
 cString cVtSatipConfig::SidsString(void) const
 {
+  cMutexLock lock(&SidsMutex);
   cString s = "";
   int last = -1;
   for (int i = 0; i < VTSATIP_MAX_CI_SLOTS; ++i)
@@ -157,9 +163,12 @@ bool cVtSatipConfig::SlotProvidesCa(int slotP, const int *caidsP, int sidP) cons
 {
   if (slotP < 1 || slotP > VTSATIP_MAX_CI_SLOTS || !caidsP)
      return false;
-  const std::vector<int> &allowed = sids[slotP - 1];
-  if (sidP > 0 && !allowed.empty() && std::find(allowed.begin(), allowed.end(), sidP) == allowed.end())
-     return false;
+  {
+    cMutexLock lock(&SidsMutex);
+    const std::vector<int> &allowed = sids[slotP - 1];
+    if (sidP > 0 && !allowed.empty() && std::find(allowed.begin(), allowed.end(), sidP) == allowed.end())
+       return false;
+  }
   for (const int *ids = caids[slotP - 1]; *ids; ++ids)
       for (const int *id = caidsP; *id; ++id)
           if (*id == *ids)

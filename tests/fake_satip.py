@@ -7,7 +7,7 @@ import socket, threading, time, struct, sys, re, os, signal
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8554
 LOG = sys.argv[2] if len(sys.argv) > 2 else "server.log"
 TIMEOUT = int(sys.argv[3]) if len(sys.argv) > 3 else 30
-FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast tcp refusetcp lose stall dead deadstart tcpdead
+FLAGS = set(sys.argv[4:])   # zeros nodelta notune busy mcast nomcast refusemcast tcp refusetcp lose stall dead deadstart tcpdead hang
 if "tcpdead" in FLAGS:
     FLAGS |= {"tcp", "dead"}   # dead: the first connection stops sending for good after a while
 conns = [0]
@@ -110,6 +110,8 @@ def handle(conn, addr):
                 hdrs = {l.split(":", 1)[0].lower(): l.split(":", 1)[1].strip() for l in lines[1:] if ":" in l}
                 query = url.split("?", 1)[1] if "?" in url else ""
                 log("REQ %s %s session=%s" % (method, query, "yes" if "session" in hdrs else "no"))
+                if "hang" in FLAGS:
+                    continue   # accepts the connection, never answers
                 cseq = hdrs.get("cseq", "0")
                 q = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                 extra = ""

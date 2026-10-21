@@ -61,6 +61,10 @@ cVtSatipDevice::cVtSatipDevice(unsigned int indexP)
 
 cVtSatipDevice::~cVtSatipDevice()
 {
+  // VDR stops the receive thread (cDevice::Action -> GetData) only in ~cDevice(), after this
+  // destructor has freed the buffers, so stop it first.
+  DetachAllReceivers();
+  Cancel(3);
   StopSectionHandler();
   delete tunerM;
   tunerM = NULL;
@@ -209,7 +213,7 @@ void cVtSatipDevice::OnServerBusy(const std::string &hostP, int portP)
   int port = 0;
   if (medium >= 0 && !isempty(*params) && cVtServers::Get()->Reassign((int)indexM, medium, hostP, portP, host, port, &name, 15000, *source, ci > 0)) {
      vtinfo("server %s:%d has no free frontend, device %u moves to %s:%d", hostP.c_str(), portP, indexM, host.c_str(), port);
-     deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str());
+     SetDeviceName(cString::sprintf("vtSAT>IP %u (%s)", indexM, name.c_str()));
      SetServerName(name);
      tunerM->SetChannel(*params, ci, pmt, host.c_str(), port);
      }
@@ -250,6 +254,7 @@ cString cVtSatipDevice::DeviceType(void) const
 
 cString cVtSatipDevice::DeviceName(void) const
 {
+  cMutexLock lock(&statMutexM); // SVDRP and the OSD ask from their own threads
   return deviceNameM;
 }
 
@@ -533,7 +538,7 @@ bool cVtSatipDevice::SetChannelDevice(const cChannel *channelP, bool liveViewP)
      vterror("no SAT>IP server with a free frontend for '%s' [device %u]", channelP->Name(), indexM);
      return false;
      }
-  deviceNameM = cString::sprintf("vtSAT>IP %u (%s)", indexM, serverName.c_str());
+  SetDeviceName(cString::sprintf("vtSAT>IP %u (%s)", indexM, serverName.c_str()));
   SetServerName(serverName);
   int ci = 0;
   int pmt = 0;

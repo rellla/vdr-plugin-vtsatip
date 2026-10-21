@@ -114,6 +114,14 @@ notice a server that just stops sending, and in TCP mode a closed connection
 is only seen by the receiver. Tests: fake server modes dead, deadstart and
 tcpdead (tests/fake_satip.py), VtSatipStalled in test_cfg.
 
+Shutdown: ~cVtSatipDevice first detaches the receivers and stops the device thread
+(VDR does it only in ~cDevice(), after the buffers are gone). ~cVtTuner sets
+cVtRtsp::SetAbort(), so a DoTune() in progress gives up within ~100 ms instead of
+running through connect/OPTIONS/SETUP/PLAY timeouts (more than the 8 s of Cancel);
+the tuner thread clears the flag again for the final TEARDOWN. Objects used by
+several threads: device name and channel name (statMutexM), SID lists (mutex in
+vtconfig.c), discoverM (discoverMutexM in vtsatip.c).
+
 Buffers: cRingBufferLinear::Clear() moves the tail, which belongs to the reader.
 The tuner thread therefore only sets flags (OnRetune: clearTsM, and
 cVtSecHandler::Clear: clearM); GetData() and the section handler thread clear
