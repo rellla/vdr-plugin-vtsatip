@@ -48,6 +48,12 @@ msgstr "  CA-IDs (Slot 1;Slot 2;...)"
 msgid "  Restart stream on CI change"
 msgstr "  Stream bei CI-Wechsel neu starten"
 
+msgid "VDR device %d: EPG scanning"
+msgstr "VDR-Gerät %d: EPG-Scan"
+
+msgid "as above"
+msgstr "wie oben"
+
 msgid "VDR device %d: server frontend"
 msgstr "VDR-Gerät %d: Server-Frontend"
 

@@ -245,7 +245,13 @@ setup values take precedence.
   VDR device N: server frontend
                                fixed frontend of the server (auto = the
                                server decides)
-  Enable EPG scanning          use the devices for VDR's background EPG scan
+  VDR device N: EPG scanning   as above / no / yes: overrides the setting above
+                               for this device
+  Enable EPG scanning          automatic / no / yes: use the devices for VDR's
+                               background EPG scan. Automatic (default since
+                               0.7.8) scans only if a kind of reception (sat,
+                               terrestrial, cable) is not covered by another
+                               device (local DVB card); see below
   Disconnect idle streams      release the server frontend when idle
   Release unused stream after  seconds without use before the frontend is
                                released (5-3600, default 20)
@@ -266,7 +272,7 @@ the longest pause between two packets (now / since tuning), followed by the
 known servers. The page refreshes once a second.
 
 setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
-CISlotDevice0..n, FrontendDevice0..n, Discovery (-1/0/1), EnableEITScan,
+CISlotDevice0..n, FrontendDevice0..n, EpgScanDevice0..n (-1/0/1), Discovery (-1/0/1), EnableEITScan,
 DisconnectIdle, IdleTimeout, AllPids, Transport (0/1/2), Trace.
 Translations are in po/ (de_DE is provided); make creates the .mo files
 (gettext is needed), make install installs them.
@@ -292,6 +298,30 @@ Not included (deliberately)
  * CI/CAM operation has been implemented following the x_pmt/x_ci
    specification but could not be tested on real hardware yet. Reports are
    welcome.
+
+EPG scan
+--------
+VDR's EPG scanner takes every free device that can read EIT and tunes it to one
+transponder after the other. With a SAT>IP device this holds a frontend of the
+server all the time, and since an unused device is released after 20 seconds
+(-I) and taken again a second later, the server sees a SETUP/TEARDOWN every
+~20 seconds. That is why "Enable EPG scanning" is on "automatic" since 0.7.8:
+the SAT>IP devices only scan when there is a kind of reception (satellite,
+terrestrial, cable) that the servers provide and no other device reads the EIT
+for. Example: a local DVB-S2 card and servers with DVB-S2 and DVB-C: the SAT>IP
+devices scan because of the cable, and the local card takes its share of the
+satellite transponders first. VDR only asks a device whether it scans at all,
+not per transponder, so a device that scans does so for all of its kinds. Set
+it to "yes" if SAT>IP is all you have, or if you want the server to scan. Older
+setup.conf files keep their stored yes/no (EnableEITScan = 1 / 0; -1 =
+automatic). Per device, "VDR device N: EPG scanning" (EpgScanDevice0..n)
+overrides this, e.g. only device 1 scans and the others stay free for live TV and
+recordings. The scanner steps every 20 seconds; if the scan should not run
+all day, switch on "Pause after scan" (EPGPauseAfterScan = 1) in VDR's EPG
+setup: after one pass VDR pauses for EPGScanTimeout hours (5 by default) and
+the unused streams are released. Without it VDR scans all the time. To see what happens, switch tracing on (svdrpsend PLUG vtsatip
+TRAC 1): every "unused for N s" release is logged at info level, tunings at
+debug level.
 
 Tuning tips
 -----------

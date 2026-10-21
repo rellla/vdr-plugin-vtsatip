@@ -40,7 +40,7 @@ private:
   int ciExtensionM;
   int ciRestartM;
   int discoveryM;       // index in discoveryTextsM: 0 = automatic, 1 = off, 2 = on
-  int eitScanM;
+  int eitScanM;         // index in discoveryTextsM: 0 = automatic, 1 = off, 2 = on
   int disconnectIdleM;
   int idleTimeoutM;
   int allPidsM;
@@ -49,9 +49,11 @@ private:
   const char *transportTextsM[3];
   int ciSlotM[VTSATIP_MAX_DEVICES];
   int frontendM[VTSATIP_MAX_DEVICES];
+  int eitDeviceM[VTSATIP_MAX_DEVICES];   // index in eitDeviceTextsM: 0 = as the general setting, 1 = off, 2 = on
   char caIdsM[128];
   char sidsM[128];
   const char *discoveryTextsM[3];
+  const char *eitDeviceTextsM[3];
   size_t serverLinesM;
 
   void Setup(void);

@@ -58,6 +58,27 @@ inline bool VtSatipIdleExpired(uint64_t nowMsP, uint64_t lastActiveMsP, int time
   return timeoutSecP > 0 && nowMsP >= lastActiveMsP && nowMsP - lastActiveMsP >= (uint64_t)timeoutSecP * 1000;
 }
 
+// Should the SAT>IP devices take part in VDR's EPG scan? Every scan step holds a frontend of the
+// server and tunes it to another transponder, which is pointless if the local cards can do it.
+// setting: 1 = yes, 0 = no, -1 = automatic: only if there is a kind of reception (sat, terrestrial,
+// cable) the SAT>IP servers provide and no other device that reads EIT does. The masks have a bit
+// (1 << VTSATIP_MEDIUM_*) per kind of reception.
+inline bool VtSatipUncoveredMedia(int providedMaskP, int coveredMaskP)
+{
+  return (providedMaskP & ~coveredMaskP) != 0;
+}
+
+inline bool VtSatipEitAllowed(int settingP, bool uncoveredMediumP)
+{
+  return settingP > 0 || (settingP < 0 && uncoveredMediumP);
+}
+
+// The setting that applies to one device: its own if it has one, otherwise the general one.
+inline int VtSatipEitSetting(int deviceSettingP, int generalSettingP)
+{
+  return deviceSettingP >= 0 ? (deviceSettingP ? 1 : 0) : generalSettingP;
+}
+
 // A stream is dead when no packet arrived for the stall timeout, or when nothing at all
 // arrived within twice that time after the tuning (the server needs a moment to start).
 // Times in milliseconds; a timeout <= 0 switches the check off.
@@ -121,13 +142,14 @@ struct cVtSatipConfig {
   int idleTimeout;        // seconds a device may stay unused before its stream is released
   int stallTimeoutMs;     // a stream without data for this long is considered dead and is set up again (2x while waiting for the first packet)
   bool allPids;                      // request the whole transponder (pids=all) instead of a PID list
-  bool eitScan;                      // let VDR use the devices for EPG scanning
+  int eitScan;                       // let VDR use the devices for EPG scanning: 1 = yes, 0 = no, -1 = automatic (only if no other device can)
   int transport;                     // VTSATIP_TRANSPORT_*
   std::string mcastInterface;        // address of the local interface used for multicast, empty = system choice
   bool realtime;
   int trace;
   bool detached;                    // start with all devices detached (SVDRP ATTA/DETA)
   int frontend[VTSATIP_MAX_DEVICES]; // 0 = let the server decide
+  int eitDevice[VTSATIP_MAX_DEVICES]; // EPG scan per device: 1 = yes, 0 = no, -1 = as eitScan
   std::vector<cVtManualServer> servers; // all -s entries; host/port above are the first one
   int discovery;                      // 0 = off, 1 = on, -1 = automatic (on if no -s was given)
   // CI extension (x_pmt / x_ci)
@@ -139,11 +161,11 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), stallTimeoutMs(5000), allPids(false), eitScan(true), transport(VTSATIP_TRANSPORT_UNICAST),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), stallTimeoutMs(5000), allPids(false), eitScan(-1), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
-        frontend[i] = ciSlot[i] = 0;
+        frontend[i] = ciSlot[i] = 0, eitDevice[i] = -1;
     for (int i = 0; i < VTSATIP_MAX_CI_SLOTS; ++i)
         for (int j = 0; j <= VTSATIP_MAX_CAIDS; ++j)
             caids[i][j] = 0;

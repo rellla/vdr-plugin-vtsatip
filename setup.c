@@ -83,7 +83,7 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
 : ciExtensionM(VtSatipConfig.ciExtension),
   ciRestartM(VtSatipConfig.ciRestart),
   discoveryM(VtSatipConfig.discovery + 1),
-  eitScanM(VtSatipConfig.eitScan),
+  eitScanM(VtSatipConfig.eitScan + 1),
   disconnectIdleM(VtSatipConfig.disconnectIdle),
   idleTimeoutM(VtSatipConfig.idleTimeout),
   allPidsM(VtSatipConfig.allPids),
@@ -95,6 +95,8 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
       ciSlotM[i] = VtSatipConfig.ciSlot[i];
   for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
       frontendM[i] = VtSatipConfig.frontend[i];
+  for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)
+      eitDeviceM[i] = VtSatipConfig.eitDevice[i] + 1;
   cString ids = VtSatipConfig.CaIdsString();
   strn0cpy(caIdsM, *ids, sizeof(caIdsM));
   cString sids = VtSatipConfig.SidsString();
@@ -102,6 +104,9 @@ cMenuSetupVtSatip::cMenuSetupVtSatip(void)
   discoveryTextsM[0] = tr("automatic");
   discoveryTextsM[1] = trVDR("no");
   discoveryTextsM[2] = trVDR("yes");
+  eitDeviceTextsM[0] = tr("as above");
+  eitDeviceTextsM[1] = trVDR("no");
+  eitDeviceTextsM[2] = trVDR("yes");
   transportTextsM[0] = tr("unicast");
   transportTextsM[1] = tr("multicast");
   transportTextsM[2] = tr("TCP");
@@ -118,7 +123,9 @@ void cMenuSetupVtSatip::Setup(void)
   Add(new cMenuEditStraItem(tr("Transport mode"), &transportM, 3, transportTextsM));
   for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i)
       Add(new cMenuEditIntItem(*cString::sprintf(tr("VDR device %d: server frontend"), i + 1), &frontendM[i], 0, VTSATIP_MAX_FRONTENDS, tr("auto")));
-  Add(new cMenuEditBoolItem(tr("Enable EPG scanning"), &eitScanM));
+  Add(new cMenuEditStraItem(tr("Enable EPG scanning"), &eitScanM, 3, discoveryTextsM));
+  for (int i = 0; i < VtSatipConfig.devices && i < VTSATIP_MAX_DEVICES; ++i)
+      Add(new cMenuEditStraItem(*cString::sprintf(tr("VDR device %d: EPG scanning"), i + 1), &eitDeviceM[i], 3, eitDeviceTextsM));
   Add(new cMenuEditBoolItem(tr("Disconnect idle streams"), &disconnectIdleM));
   Add(new cMenuEditIntItem(tr("Release unused stream after (s)"), &idleTimeoutM, 5, 3600));
   Add(new cMenuEditBoolItem(tr("Request all PIDs (pids=all)"), &allPidsM));
@@ -181,7 +188,7 @@ void cMenuSetupVtSatip::Store(void)
   VtSatipConfig.ciExtension = ciExtensionM != 0;
   VtSatipConfig.ciRestart = ciRestartM != 0;
   VtSatipConfig.discovery = discoveryM - 1;
-  VtSatipConfig.eitScan = eitScanM != 0;
+  VtSatipConfig.eitScan = eitScanM - 1;
   VtSatipConfig.disconnectIdle = disconnectIdleM != 0;
   VtSatipConfig.idleTimeout = idleTimeoutM < 5 ? 5 : idleTimeoutM;
   VtSatipConfig.trace = traceM;
@@ -190,7 +197,7 @@ void cMenuSetupVtSatip::Store(void)
   SetupStore("EnableCIExtension", ciExtensionM);
   SetupStore("CIRestart", ciRestartM);
   SetupStore("Discovery", VtSatipConfig.discovery);
-  SetupStore("EnableEITScan", eitScanM);
+  SetupStore("EnableEITScan", VtSatipConfig.eitScan);
   SetupStore("DisconnectIdle", disconnectIdleM);
   SetupStore("IdleTimeout", VtSatipConfig.idleTimeout);
   VtSatipConfig.allPids = allPidsM != 0;
@@ -201,6 +208,8 @@ void cMenuSetupVtSatip::Store(void)
       SetupStore(*cString::sprintf("CISlotDevice%d", i), ciSlotM[i]);
       VtSatipConfig.frontend[i] = frontendM[i];
       SetupStore(*cString::sprintf("FrontendDevice%d", i), frontendM[i]);
+      VtSatipConfig.eitDevice[i] = eitDeviceM[i] - 1;
+      SetupStore(*cString::sprintf("EpgScanDevice%d", i), VtSatipConfig.eitDevice[i]);
       }
   VtSatipSetupChanged();
 }
