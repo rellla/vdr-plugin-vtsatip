@@ -198,13 +198,16 @@ internal CAM (HasInternalCam) so VDR does not look for another one.
         channel; VtSatipUncoveredMedia, VtSatipEitAllowed). VDR asks ProvidesEIT()
         per device, not per transponder, so this cannot be finer than that;
         a device's own setting (eitDevice, VtSatipEitSetting) wins over the general one
-        and release of the stream when idle.
+        and release of the stream when idle. ProvidesEIT() is also false while no
+        server has a free frontend for the device (cVtServers::HasFree): the
+        device would refuse the channel, and the scanner drops a transponder it
+        has handed to a device from its list.
         VDR calls SetPowerSaveMode(true) only from the EPG scanner's pause
         (cDevice::SetPowerSaveIfUnused), so it does not cover a device that is
         simply not needed any more. The plugin's MainThreadHook runs once a
         second (VDR main thread, like SetChannelDevice) and calls
         cVtSatipDevice::IdleCheck: a device that is not receiving and not
-        occupied, and was not tuned for -I seconds (default 20), goes through
+        occupied, and was not tuned for -I seconds (default 30), goes through
         SetPowerSaveMode(true): tuner Release (TEARDOWN), server binding freed,
         channel forgotten so IsTunedToTransponder() is false and the next
         SetChannel retunes. VDR always calls SetChannelDevice for a switch.

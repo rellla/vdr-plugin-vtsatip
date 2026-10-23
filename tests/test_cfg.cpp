@@ -65,7 +65,7 @@ int main(){
   CHECK(s.SetupParse("Transport", "1") && s.transport == VTSATIP_TRANSPORT_MULTICAST && !s.SetupParse("Transport", "7") && s.SetupParse("Transport", "2") && s.transport == VTSATIP_TRANSPORT_TCP, "setup: transport");
   CHECK(!s.SetupParse("Nonsense", "1"), "setup: unknown names are reported");
   { // release of unused streams
-    { cVtSatipConfig d; CHECK(d.idleTimeout == 20 && d.disconnectIdle, "idle: default 20 s, enabled"); }
+    { cVtSatipConfig d; CHECK(d.idleTimeout == 30 && d.disconnectIdle, "idle: default 30 s, enabled"); }
     CHECK(s.SetupParse("IdleTimeout", "45") && s.idleTimeout == 45 && !s.SetupParse("IdleTimeout", "2") && !s.SetupParse("IdleTimeout", "99999") && s.idleTimeout == 45, "setup: idle timeout (5-3600 s)");
     CHECK(!VtSatipIdleExpired(100000, 90000, 20) && VtSatipIdleExpired(110000, 90000, 20) && VtSatipIdleExpired(150000, 90000, 20), "idle: expires after the timeout");
     CHECK(!VtSatipIdleExpired(1000, 5000, 20) && !VtSatipIdleExpired(200000, 0, 0), "idle: clock going back or timeout 0 never expires");

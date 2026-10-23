@@ -120,7 +120,7 @@ const char *cPluginVtSatip::CommandLineHelp(void)
          "  -A,       --detached     start with all devices detached (see SVDRP ATTA)\n"
          "  -N,       --nodisconnect do not tear down the stream when a device becomes idle\n"
          "  -I SEC,   --idle=SEC     release the stream of a device that was not used for SEC seconds\n"
-         "                           (5-3600, default 20)\n"
+         "                           (5-3600, default 30)\n"
          "  -R,       --norealtime   do not try to give the RTP threads realtime priority\n"
          "  -t MODE,  --trace=MODE   0 = off, 1 = log RTSP traffic and tuning\n";
 }
