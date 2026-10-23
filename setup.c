@@ -55,6 +55,11 @@ void cMenuVtSatipStats::Fill(void)
          double pct = (st.packets + st.lost) ? 100.0 * st.lost / (st.packets + st.lost) : 0;
          Add(new cOsdItem(*cString::sprintf(tr("  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"), st.packets, st.lost, pct, st.reordered), osUnknown, false));
          Add(new cOsdItem(*cString::sprintf(tr("  Longest pause between packets: %lu ms now, %lu ms since tuning"), st.gapMs, st.gapMaxMs), osUnknown, false));
+         Add(new cOsdItem(*cString::sprintf(tr("  Pauses of 200 ms or more: %lu, after a PLAY request: %lu"), st.pauses, st.playPauses), osUnknown, false));
+         if (st.rcvBufKiB > 0)
+            Add(new cOsdItem(*cString::sprintf(tr("  RTP receive buffer: %d KiB"), st.rcvBufKiB), osUnknown, false));
+         else if (st.transport == VTSATIP_TRANSPORT_TCP)
+            Add(new cOsdItem(tr("  RTP receive buffer: automatic (TCP)"), osUnknown, false));
          }
       lastBytesM[i] = st.bytes;
       }

@@ -6,6 +6,8 @@
 #include <atomic>
 #include <map>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include "common.h"
 #include "tuner.h"
 #include "sectionfilter.h"
@@ -44,6 +46,14 @@ int main(int argc, char **argv) {
   int ka = argc > 2 ? atoi(argv[2]) : 0;
   VtSatipConfig.host = "127.0.0.1"; VtSatipConfig.port = port; VtSatipConfig.realtime = false;
   Sink sink; cVtTuner *t = new cVtTuner(sink);
+
+  {
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int got = VtSetRcvBuf(fd, 64 * 1024);
+    CHECK(got >= 64 * 1024, "a small receive buffer is set completely and reported in bytes");
+    CHECK(VtSetRcvBuf(-1, 64 * 1024) == 0 && VtSetRcvBuf(fd, 0) == 0, "no socket or no size: nothing is set");
+    close(fd);
+  }
 
   Mark("1 first tune");
   cTimeMs tm(0);

@@ -98,8 +98,23 @@ int main(int argc, char **argv) {
     CHECK(WaitFor([&]{ return t.GapMs() < 300; }, 8000), "the recent gap goes back to normal once the stream runs again");
     CHECK(t.GapMaxMs() >= 1000, "the maximum since tuning is kept");
     CHECK(strstr(*t.GetInformation(), "gapmax=") != NULL && strstr(*t.GetInformation(), "rate=") != NULL, "rate and gaps are part of the tuner information");
+    CHECK(t.RcvBufKiB() > 0 && strstr(*t.GetInformation(), "rcvbuf=") != NULL, "the real size of the receive buffer is known and part of the tuner information");
+    // (whether it counts as related to the PLAY of the tuning depends on the timing of the fake server)
+    CHECK(t.Pauses() == 1, "the stall is counted as one pause");
+    CHECK(strstr(*t.GetInformation(), "pauses=1 playpauses=") != NULL, "pauses are part of the tuner information");
     t.SetChannel(TP2);
     CHECK(WaitFor([&]{ return t.HasLock() && sink.lastMarker == 12188; }, 4000) && t.GapMaxMs() < 500, "a retune starts the gap statistics afresh");
+    CHECK(t.Pauses() == 0, "and the pause counters");
+  }
+  else if (mode == "pidstall") {
+    t.SetChannel(TP1);
+    t.SetPid(100, true);
+    CHECK(WaitFor([&]{ return t.HasLock() && t.Packets() > 100; }, 4000), "stream runs");
+    usleep(300000);
+    CHECK(t.Pauses() == 0, "no pause while the stream runs");
+    t.SetPid(200, true);
+    CHECK(WaitFor([&]{ return t.Pauses() >= 1; }, 4000), "the pause after the PID change is counted");
+    CHECK(t.PlayPauses() == t.Pauses(), "and related to the PLAY request");
   }
   else if (mode == "allpids") {
     t.SetChannel(TP1);

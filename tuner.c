@@ -40,6 +40,7 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
   rtpFdM(-1),
   rtcpFdM(-1),
   rtpPortM(-1),
+  rcvBufM(0),
   multicastM(false),
   tcpRtspM(NULL),
   tcpRtpChM(0),
@@ -59,25 +60,11 @@ cVtReceiver::cVtReceiver(cVtTuner &tunerP)
   prevPacketUsM(0),
   windowStartUsM(0),
   windowGapUsM(0),
-  windowBytesM(0)
+  windowBytesM(0),
+  lastPlayUsM(0),
+  pausesM(0),
+  playPausesM(0)
 {
-}
-
-// The kernel silently limits the receive buffer to net.core.rmem_max. A small buffer
-// loses packets whenever the receiver thread is delayed, so say so once.
-static void SetReceiveBuffer(int fdP)
-{
-  static std::atomic<bool> warned(false);
-  int want = VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : 2 * 1024 * 1024;
-  setsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &want, sizeof(want));
-  int got = 0;
-  socklen_t len = sizeof(got);
-  if (getsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &got, &len) == 0) {
-     got /= 2; // Linux reports twice the usable size
-     vtdebug("receive buffer %d bytes (wanted %d)", got, want);
-     if (got < want && !warned.exchange(true))
-        vterror("the receive buffer is limited to %d bytes (wanted %d); raise net.core.rmem_max to avoid lost packets", got, want);
-     }
 }
 
 uint64_t cVtReceiver::NowUs(void)
@@ -104,6 +91,10 @@ void cVtReceiver::TrackTiming(int bytesP)
         windowGapUsM = gap;
      if (gap > gapMaxUsM.load())
         gapMaxUsM = gap;
+     if (gap >= (unsigned long)ePauseMs * 1000) {
+        ++pausesM;
+        LogPause(gap, prevPacketUsM, now);
+        }
      }
   gapValidM = true;
   prevPacketUsM = now;
@@ -118,6 +109,25 @@ void cVtReceiver::TrackTiming(int bytesP)
      windowGapUsM = 0;
      windowBytesM = 0;
      }
+}
+
+// A pause is logged with its relation to the last PLAY request: some servers stop the stream for a
+// moment, when the PIDs are changed (addpids/delpids) during a running session.
+void cVtReceiver::LogPause(unsigned long gapUsP, uint64_t startUsP, uint64_t endUsP)
+{
+  uint64_t play = lastPlayUsM.load();
+  cString relation;
+  if (play && play >= startUsP && play <= endUsP) {
+     relation = cString::sprintf("a PLAY request was sent %lu ms after it began", (unsigned long)((play - startUsP) / 1000));
+     ++playPausesM;
+     }
+  else if (play && play < startUsP && startUsP - play <= (uint64_t)ePlayRelationMs * 1000) {
+     relation = cString::sprintf("it began %lu ms after a PLAY request", (unsigned long)((startUsP - play) / 1000));
+     ++playPausesM;
+     }
+  else
+     relation = cString::sprintf("no PLAY request within %d ms before", (int)ePlayRelationMs);
+  vtinfo("device %d: no RTP packet for %lu ms, %s", tunerM.indexM, gapUsP / 1000, *relation);
 }
 
 // time since the last packet in microseconds, 0 if nothing arrived since the (re)tune
@@ -207,7 +217,7 @@ bool cVtReceiver::Open(void)
          ok = (bind(rtcp, (struct sockaddr *)&a, sizeof(a)) == 0);
          }
       if (ok) {
-         SetReceiveBuffer(rtp);
+         rcvBufM = VtSetRcvBuf(rtp, VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : eDefaultRcvBuf);
          rtpFdM = rtp;
          rtcpFdM = rtcp;
          rtpPortM = port;
@@ -274,7 +284,7 @@ bool cVtReceiver::OpenMulticast(const std::string &groupP, const std::string &so
             close(fds[i]);
      return false;
      }
-  SetReceiveBuffer(fds[0]);
+  rcvBufM = VtSetRcvBuf(fds[0], VtSatipConfig.rcvBufSize > 0 ? VtSatipConfig.rcvBufSize : eDefaultRcvBuf);
   rtpFdM = fds[0];
   rtcpFdM = fds[1];
   rtpPortM = rtpPortP;
@@ -813,7 +823,7 @@ bool cVtTuner::DoTune(const std::string &paramsP, const std::set<int> &pidsP, co
          fresh = true;
          }
       vtdebug("device %d: tune %s", indexM, query.c_str());
-      if (rtspM.Play(query.c_str()))
+      if (SendPlay(query.c_str()))
          break;
       failStatusM = rtspM.LastStatus();
       DropSession();
@@ -841,7 +851,7 @@ bool cVtTuner::DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int
      // switching between "all" and a PID list (setup change): send the complete list
      std::string q = "pids=" + JoinPids(wantP) + CiParams(pmtP, ciSlotP);
      vtdebug("device %d: pids %s", indexM, q.c_str());
-     if (!rtspM.Play(q.c_str()))
+     if (!SendPlay(q.c_str()))
         return false;
      activePidsM = wantP;
      activePmtM = pmtP;
@@ -867,13 +877,13 @@ bool cVtTuner::DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int
   if (fullPidListM)
      query = "pids=" + JoinPids(wantP) + ci;
   vtdebug("device %d: pids %s", indexM, query.c_str());
-  if (!rtspM.Play(query.c_str())) {
+  if (!SendPlay(query.c_str())) {
      // some servers (FRITZ!WLAN Repeater DVB-C) do not know addpids/delpids: send the complete list instead
      if (fullPidListM || rtspM.LastStatus() < 400 || (add.empty() && del.empty()))
         return false;
      query = "pids=" + JoinPids(wantP) + ci;
      vtinfo("device %d: server refused addpids/delpids, using complete PID lists", indexM);
-     if (!rtspM.Play(query.c_str()))
+     if (!SendPlay(query.c_str()))
         return false;
      fullPidListM = true;
      }
@@ -1033,9 +1043,12 @@ cString cVtTuner::GetInformation(void)
   std::string pmt = wantPmtM.empty() ? std::string("-") : JoinPids(wantPmtM);
   int ci = wantCiSlotM;
   mutexM.Unlock();
-  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu rtp=%lu lost=%lu reordered=%lu rate=%.2fMbit/s gap=%lums gapmax=%lums pids=%zu ci=%d pmt=%s params=%s",
+  // RTP over TCP without -r: the kernel tunes the buffer of the connection
+  int rcvBufKiB = RcvBufKiB();
+  cString rcvBuf = rcvBufKiB > 0 ? cString::sprintf("%dKiB", rcvBufKiB) : cString(TransportMode() == VTSATIP_TRANSPORT_TCP ? "auto" : "-");
+  return cString::sprintf("session=%s accept=%d lock=%d fe=%d strength=%d quality=%d bytes=%lu rtp=%lu lost=%lu reordered=%lu rate=%.2fMbit/s gap=%lums gapmax=%lums pauses=%lu playpauses=%lu rcvbuf=%s pids=%zu ci=%d pmt=%s params=%s",
                           sessionUpM.load() ? "up" : "down", (int)acceptM.load(), (int)lockM.load(),
                           frontendM.load(), strengthM.load(), qualityM.load(), bytesM.load(),
                           receiverM.Packets(), receiverM.Lost(), receiverM.Reordered(),
-                          RateKbit() / 1000.0, GapMs(), GapMaxMs(), pids, ci, pmt.c_str(), params.c_str());
+                          RateKbit() / 1000.0, GapMs(), GapMaxMs(), Pauses(), PlayPauses(), *rcvBuf, pids, ci, pmt.c_str(), params.c_str());
 }

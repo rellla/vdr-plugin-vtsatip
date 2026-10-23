@@ -105,6 +105,13 @@ packet (TrackTiming): the data rate and the longest pause between two packets
 over 2 s windows and since the (re)tune. A stall that is going on counts at
 once; the first packet after a retune does not (ResetSequence). These values
 are meant for finding out whether a video underrun comes from late delivery.
+The RTP socket gets its receive buffer from VtSetRcvBuf() (rtsp.c): SO_RCVBUFFORCE
+first (needs CAP_NET_ADMIN, ignores net.core.rmem_max), then SO_RCVBUF; the size
+the kernel really granted is kept for rcvbuf= (Linux reports it doubled).
+Every PLAY request goes through cVtTuner::SendPlay(), which tells the receiver
+the time (MarkPlay). A gap of at least ePauseMs (200 ms) counts as a pause and
+is logged by LogPause(): a PLAY request during the pause or up to
+ePlayRelationMs (2 s) before it relates the pause to the request (playpauses=).
 
 Stall watchdog (cVtTuner::StreamStalled, tuner thread, checked once a second
 by the Action loop): a session without a packet for VtSatipConfig.stallTimeoutMs
@@ -253,8 +260,8 @@ sources next to it). Without VDR installed:
                          runs: config parser, section filters, tuner against
                          tests/fake_satip.py, CI flow, quirk modes
                          (zeros nodelta notune busy mcast nomcast refusemcast
-                         tcp notcp refusetcp allpids lose stall), UPnP discovery and
-                         the translation check
+                         tcp notcp refusetcp allpids lose stall pidstall), UPnP
+                         discovery and the translation check
   tests/syntax_check.sh  compile check of all sources with the stub headers
 
   tests/build_vdr.sh TAG builds the plugin against the real headers of one VDR
@@ -281,7 +288,7 @@ missing in po/de_DE.po. Log messages and SVDRP replies stay English.
   * -t 1 (or Tracing in the setup menu) logs every RTSP request and response and
     each tuning decision to the syslog.
   * "svdrpsend plug vtsatip INFO" shows servers (busy/free) and per device
-    session, lock, frontend, signal, rtp=/lost=/reordered=/rate=/gap=/gapmax= and the last params.
+    session, lock, frontend, signal, rtp=/lost=/reordered=/rate=/gap=/gapmax=/pauses=/playpauses=/rcvbuf= and the last params.
   * The statistics page in the setup menu shows the same live.
   * lost= growing with UDP: raise net.core.rmem_max and -r; with -T tcp
     lost stays 0 but latency can grow.
