@@ -161,7 +161,7 @@ struct cVtSatipConfig {
   cVtSatipConfig(void)
   : host(""), port(VTSATIP_DEFAULT_RTSP_PORT), devices(1),
     systems(VTSATIP_SYS_SAT | VTSATIP_SYS_TERR | VTSATIP_SYS_CABLE),
-    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(20), stallTimeoutMs(5000), allPids(false), eitScan(-1), transport(VTSATIP_TRANSPORT_UNICAST),
+    rcvBufSize(0), portStart(0), portStop(0), disconnectIdle(true), idleTimeout(30), stallTimeoutMs(5000), allPids(false), eitScan(-1), transport(VTSATIP_TRANSPORT_UNICAST),
     realtime(true), trace(0), detached(false), discovery(-1), ciExtension(false), ciRestart(true)
   {
     for (int i = 0; i < VTSATIP_MAX_DEVICES; ++i)

@@ -291,6 +291,20 @@ bool cVtServers::Assign(int deviceP, int mediumP, std::string &hostP, int &portP
   return false;
 }
 
+bool cVtServers::HasFree(int deviceP, int mediumP) const
+{
+  if (mediumP < 0 || mediumP >= VTSATIP_MEDIUM_COUNT)
+     return false;
+  cMutexLock lock(&mutexM);
+  uint64_t now = NowMs();
+  for (size_t i = 0; i < serversM.size(); ++i) {
+      const cVtServerInfo &s = serversM[i];
+      if (s.busyUntil[mediumP] <= now && s.caps[mediumP] > Used(s.id, mediumP, deviceP))
+         return true; // the device's own binding is not counted, so a device that holds a frontend finds it free
+      }
+  return false;
+}
+
 void cVtServers::Unassign(int deviceP)
 {
   if (deviceP < 0 || deviceP >= VTSATIP_MAX_DEVICES)

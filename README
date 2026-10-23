@@ -59,7 +59,7 @@ Usage / switching from vtuner-ng
   -A               start with all devices detached (see SVDRP ATTA/DETA)
   -N               do not tear the stream down when a device becomes idle
   -I SEC           release the stream of a device that was not used for SEC
-                   seconds (5-3600, default 20)
+                   seconds (5-3600, default 30)
   -R               do not try realtime priority
   -t 1             tracing: RTSP traffic and tuning in the syslog
 
@@ -89,9 +89,16 @@ library is needed.
   vdr -P 'vtsatip -d 2 -s 192.168.1.20'            fixed server, no discovery
   vdr -P 'vtsatip -d 4 -u 1 -s 192.168.1.20|DVBS2-2|Octonet -s 192.168.1.30:8554|DVBT2-4'
 
-CAPS gives the number of frontends per kind of reception, like UPnP does.
-Without CAPS the server has any number of frontends for the systems allowed by
--D (so a single -s behaves as before). Manual entries win over the same
+CAPS gives the number of frontends per kind of reception, like UPnP does:
+DVBS2-4 means four. A system without a number counts as ONE frontend (DVBS2,DVBS
+is one satellite frontend). Without CAPS at all the server has any number of
+frontends for the systems allowed by -D (so a single -s behaves as before).
+Always give the numbers when the server can do more than one stream per kind of
+reception: with "-d 4 -s 192.168.1.20|DVBC -s 192.168.1.21|DVBS2,DVBS" only one
+stream per server can run, so two recordings on different satellite transponders
+do not work, and a device without a free frontend refuses a channel ("no SAT>IP
+server with a free frontend"). Use -s 192.168.1.20|DVBC-4 -s
+192.168.1.21|DVBS2-4,DVBS-4 instead. Manual entries win over the same
 device found by UPnP and are never removed by "byebye".
 
 CI: The CI extension (slot assignment) is only used on servers which have a
@@ -111,7 +118,7 @@ Every VDR device (-d) picks a server with a free frontend for the kind of
 reception (sat/terr/cable) when it is switched and stays there as long as it
 is used on that server. If everything is busy VDR uses another device. A
 device that is not used any more (no recording, no live view, no tuning) for
-20 seconds (-I) gives its frontend back to the server (since 0.7.5; before
+30 seconds (-I) gives its frontend back to the server (since 0.7.5; before
 that only the EPG scanner's pause did this). Switching back within that time
 is as fast as ever. A source is only available if a known
 server supplies the matching system. Be careful with -f (fixed frontends) and
@@ -254,7 +261,7 @@ setup values take precedence.
                                device (local DVB card); see below
   Disconnect idle streams      release the server frontend when idle
   Release unused stream after  seconds without use before the frontend is
-                               released (5-3600, default 20)
+                               released (5-3600, default 30)
   Request all PIDs             pids=all, see above
   Enable CI extension          shows, per VDR device, the CI slot, the CA IDs
                                ("0x1830,0x1843;0x0500"), the service IDs
@@ -303,9 +310,11 @@ EPG scan
 --------
 VDR's EPG scanner takes every free device that can read EIT and tunes it to one
 transponder after the other. With a SAT>IP device this holds a frontend of the
-server all the time, and since an unused device is released after 20 seconds
-(-I) and taken again a second later, the server sees a SETUP/TEARDOWN every
-~20 seconds. That is why "Enable EPG scanning" is on "automatic" since 0.7.8:
+server all the time. The scanner steps every 20 seconds; with the release after
+20 seconds (the default up to 0.7.8) the frontend was given back and taken
+again a second later, so the server saw a SETUP/TEARDOWN every ~20 seconds. The
+default release time is 30 seconds since 0.7.9, so a device in the middle of a
+scan pass keeps its stream and is only retuned. That is also why "Enable EPG scanning" is on "automatic" since 0.7.8:
 the SAT>IP devices only scan when there is a kind of reception (satellite,
 terrestrial, cable) that the servers provide and no other device reads the EIT
 for. Example: a local DVB-S2 card and servers with DVB-S2 and DVB-C: the SAT>IP
@@ -319,8 +328,13 @@ overrides this, e.g. only device 1 scans and the others stay free for live TV an
 recordings. The scanner steps every 20 seconds; if the scan should not run
 all day, switch on "Pause after scan" (EPGPauseAfterScan = 1) in VDR's EPG
 setup: after one pass VDR pauses for EPGScanTimeout hours (5 by default) and
-the unused streams are released. Without it VDR scans all the time. To see what happens, switch tracing on (svdrpsend PLUG vtsatip
-TRAC 1): every "unused for N s" release is logged at info level, tunings at
+the unused streams are released (VDR asks about every 10 seconds); key presses
+do not end the pause. Without it VDR scans all the time. During a pass a device
+keeps its stream from step to step (the release time is longer than the 20
+seconds between steps) and is only retuned. A device that has no free frontend
+(see the frontend numbers in -s) does not take part in the scan, so VDR does
+not drop transponders it could not scan.
+To see what happens, switch tracing on (svdrpsend PLUG vtsatip TRAC 1): every "unused for N s" release is logged at info level, tunings at
 debug level.
 
 Tuning tips

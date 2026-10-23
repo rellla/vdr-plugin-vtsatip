@@ -424,6 +424,12 @@ bool cVtSatipDevice::ProvidesEIT(void) const
 {
   int setting = VtSatipEitSetting(indexM < VTSATIP_MAX_DEVICES ? VtSatipConfig.eitDevice[indexM] : -1, VtSatipConfig.eitScan);
   bool allowed = VtSatipEitAllowed(setting, setting < 0 && AutoEitWanted());
+  // A device that cannot get a frontend refuses the channel, and VDR's scanner would drop the transponder from
+  // its list for this pass.
+  bool frontend = false;
+  for (int medium = 0; medium < VTSATIP_MEDIUM_COUNT && !frontend; ++medium)
+      frontend = SystemEnabled(medium) && cVtServers::Get()->HasFree((int)indexM, medium);
+  allowed = allowed && frontend;
 #if defined(APIVERSNUM) && APIVERSNUM < 20403
   return allowed;
 #else

@@ -63,6 +63,14 @@ static void Units() {
   s.Unassign(0);
   CHECK(s.Assign(3, 0, h, p) && h == "A", "freed frontend is reused (device 3 switches to satellite)");
   CHECK(!s.Provides(2), "no cable");
+  CHECK(s.HasFree(3, 0) && s.HasFree(3, 1) && !s.HasFree(3, 2), "HasFree: device 3 holds a satellite frontend, terrestrial is free, cable does not exist");
+  { cVtServers q; int a3[3] = {1, 0, 0}; q.AddManual("A", 554, "A", a3);
+    std::string h3; int p3;
+    CHECK(q.HasFree(0, 0) && q.HasFree(1, 0), "HasFree: free before anyone has it");
+    CHECK(q.Assign(0, 0, h3, p3) && q.HasFree(0, 0) && !q.HasFree(1, 0), "HasFree: the holder still has it, another device has none");
+    q.Unassign(0);
+    CHECK(q.HasFree(1, 0), "HasFree: free again after Unassign");
+  }
   { // busy handling: A (2 sat) and B (1 sat, 1 terr)
     cVtServers q; int a2[3] = {2, 0, 0}, b2[3] = {1, 1, 0};
     q.AddManual("A", 554, "A", a2); q.AddManual("B", 554, "B", b2);

@@ -75,6 +75,8 @@ public:
   // binds a device to a server with a free frontend of the medium
   bool Assign(int deviceP, int mediumP, std::string &hostP, int &portP, std::string *nameP = NULL, const char *sourceP = NULL, bool needCiP = false);
   void Unassign(int deviceP);
+  // can the device get a frontend of this kind of reception? (it has one already, or a server has a free one)
+  bool HasFree(int deviceP, int mediumP) const;
   // the server of a device refused a stream (503): remember that for a while and move the device to another
   // server if there is one with a free frontend (false: nothing else available)
   void MarkBusy(const std::string &hostP, int portP, int mediumP, int msP);
