@@ -275,8 +275,9 @@ setup values take precedence.
 Statistics page (since 0.7.0): per device the server, channel, lock state,
 signal strength and quality, transport (UDP/multicast/TCP), data rate and
 total, RTP packets, lost and reordered packets (with the loss in percent),
-the longest pause between two packets (now / since tuning), followed by the
-known servers. The page refreshes once a second.
+the longest pause between two packets (now / since tuning), the number of
+pauses of 200 ms or more (and how many of them followed a PLAY request), the
+receive buffer of the RTP socket, followed by the known servers. The page refreshes once a second.
 
 setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
 CISlotDevice0..n, FrontendDevice0..n, EpgScanDevice0..n (-1/0/1), Discovery (-1/0/1), EnableEITScan,
@@ -289,7 +290,12 @@ SVDRP
   plug vtsatip INFO       state of all devices; per device also rtp= (received
                           RTP packets), lost= and reordered=, rate= (data rate
                           of the last 2 s), gap= (longest pause between two
-                          packets in the last 2 s) and gapmax= (since tuning)
+                          packets in the last 2 s), gapmax= (since tuning),
+                          pauses= (pauses of 200 ms or more since tuning),
+                          playpauses= (... of them up to 2 s after a PLAY
+                          request) and rcvbuf= (receive buffer the RTP socket
+                          really got; with RTP over TCP "auto", unless -r sets
+                          the buffer of the RTSP connection)
   plug vtsatip SCAN       search for servers now
   plug vtsatip ATTA|DETA  see above
   plug vtsatip TRAC 1     tracing on/off
@@ -343,7 +349,13 @@ Tuning tips
        LimitRTPRIO=10   (and possibly AmbientCapabilities=CAP_SYS_NICE)
  * If packets are lost raise net.core.rmem_max, e.g. to 4194304, and set -r.
    The lost= counter in SVDRP INFO and the statistics page show whether it
-   helped.
+   helped. The kernel silently cuts the receive buffer down to rmem_max (the
+   default is only about 208 KiB); with CAP_NET_ADMIN (e.g. systemd
+   AmbientCapabilities=CAP_NET_ADMIN) the plugin sets it with SO_RCVBUFFORCE
+   regardless of rmem_max. rcvbuf= in INFO and the statistics page show the
+   size the socket really got, a cut buffer is also logged once. With RTP
+   over TCP the kernel tunes the buffer of the connection itself (rcvbuf=auto),
+   -r sets it to a fixed size.
  * Video buffer underruns without lost packets: look at gap= and gapmax= in
    INFO (since 0.7.4). A pause of several hundred milliseconds means the server
    or the network delivered the stream late, nothing the plugin can fix. Small
@@ -352,7 +364,14 @@ Tuning tips
    tuning) is set up again by the plugin (since 0.7.6); "the stream stalled"
    in the log shows that it happened. On a channel without signal some servers
    send nothing, so that message then repeats about every 10 seconds.
- * If the log says that the receive buffer is limited, raise net.core.rmem_max.
+ * If the log says that the receive buffer is limited, raise net.core.rmem_max
+   or allow CAP_NET_ADMIN (see above).
+ * Every pause of 200 ms or more is logged (since 0.7.10) with its relation to
+   the last PLAY request, e.g. "no RTP packet for 640 ms, it began 35 ms after
+   a PLAY request". Some servers stop the stream for a moment, when VDR
+   changes the PIDs of a running session (addpids/delpids). If most pauses
+   follow a PLAY request (playpauses= close to pauses=), the server is the
+   reason; pids=all (-a) avoids PID changes at the cost of bandwidth.
 
 Developer information
 ---------------------

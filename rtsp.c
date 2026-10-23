@@ -47,7 +47,8 @@ cVtRtsp::cVtRtsp(void)
   brokenM(false),
   ilenM(0),
   handlerM(NULL),
-  handlerCtxM(NULL)
+  handlerCtxM(NULL),
+  rcvBufM(0)
 {
   sessionM[0] = 0;
   rxM[0] = 0;
@@ -135,10 +136,8 @@ bool cVtRtsp::Connect(const char *hostP, int portP, int timeoutMsP)
       fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
       int one = 1;
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-      if (VtSatipConfig.rcvBufSize > 0) { // large bursts of interleaved data
-         int sz = VtSatipConfig.rcvBufSize;
-         setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &sz, sizeof(sz));
-         }
+      // large bursts of interleaved data; without -r the kernel tunes the buffer of a TCP connection
+      rcvBufM = VtSatipConfig.rcvBufSize > 0 ? VtSetRcvBuf(fd, VtSatipConfig.rcvBufSize) : 0;
       fdM = fd;
       if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0)
          ok = true;
@@ -539,4 +538,25 @@ bool cVtRtsp::Pump(int timeoutMsP)
         }
      }
   return true;
+}
+
+int VtSetRcvBuf(int fdP, int sizeP)
+{
+  if (fdP < 0 || sizeP <= 0)
+     return 0;
+  bool forced = false;
+#ifdef SO_RCVBUFFORCE
+  forced = setsockopt(fdP, SOL_SOCKET, SO_RCVBUFFORCE, &sizeP, sizeof(sizeP)) == 0;
+#endif
+  if (!forced)
+     setsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &sizeP, sizeof(sizeP));
+  int size = 0;
+  socklen_t len = sizeof(size);
+  if (getsockopt(fdP, SOL_SOCKET, SO_RCVBUF, &size, &len) < 0)
+     return 0;
+  size /= 2; // Linux reports the doubled value (it includes the bookkeeping overhead)
+  static std::atomic<bool> warned(false);
+  if (size < sizeP && !warned.exchange(true))
+     vtinfo("the socket receive buffer is %d KiB instead of %d KiB: raise net.core.rmem_max or allow CAP_NET_ADMIN", size / 1024, sizeP / 1024);
+  return size;
 }

@@ -63,6 +63,7 @@ private:
   size_t ilenM;
   cVtInterleavedFn handlerM;
   void *handlerCtxM;
+  std::atomic<int> rcvBufM;  // receive buffer set with -r (bytes), 0 = TCP autotuning
   void LockIo(void);
   int ParseInput(bool wantResponseP);   // 1 = response in rxM, 0 = need more data
   bool TransactTcp(int timeoutMsP);
@@ -78,6 +79,8 @@ public:
   bool Connect(const char *hostP, int portP, int timeoutMsP = 3000);
   void Close(void);
   bool IsOpen(void) const { return fdM >= 0; }
+  // receive buffer of the connection, if it was set with -r (bytes); 0 = the kernel tunes it (RTP over TCP)
+  int RcvBuf(void) const { return rcvBufM.load(); }
   // Makes every wait for the server give up within ~100 ms (shutdown); SetAbort(false) allows
   // waiting again, e.g. for the final TEARDOWN.
   void SetAbort(bool abortP) { abortM = abortP; }
@@ -100,5 +103,10 @@ public:
   bool Play(const char *queryP);
   bool Teardown(void);
 };
+
+// Sets the receive buffer of a socket. SO_RCVBUFFORCE (needs CAP_NET_ADMIN) is tried first, it is not
+// limited by net.core.rmem_max; otherwise the kernel silently cuts SO_RCVBUF down to rmem_max.
+// Returns the size the socket really got (in bytes, 0 = unknown), a cut is logged once.
+int VtSetRcvBuf(int fdP, int sizeP);
 
 #endif // __VTSATIP_RTSP_H

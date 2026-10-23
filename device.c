@@ -117,6 +117,9 @@ bool cVtSatipDevice::GetStats(unsigned indexP, cVtDeviceStats &statsP)
   statsP.reordered = d->tunerM->PacketsReordered();
   statsP.gapMs = d->tunerM->GapMs();
   statsP.gapMaxMs = d->tunerM->GapMaxMs();
+  statsP.rcvBufKiB = d->tunerM->RcvBufKiB();
+  statsP.pauses = d->tunerM->Pauses();
+  statsP.playPauses = d->tunerM->PlayPauses();
   cMutexLock statLock(&d->statMutexM);
   statsP.server = d->serverNameM;
   if (d->channelValidM)

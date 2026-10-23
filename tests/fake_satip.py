@@ -60,6 +60,9 @@ def sender(st, sock):
         if "stall" in FLAGS and st.seq > 200 and not getattr(st, "stalled", False):
             st.stalled = True
             time.sleep(1.3)  # simulate a server that stops sending for a moment
+        if getattr(st, "pidstall", False):
+            st.pidstall = False
+            time.sleep(0.6)  # simulate a server that stops the stream for a moment on a PID change
         data = st.packets()
         # at most 7 TS packets per datagram
         for i in range(0, len(data), 188 * 7):
@@ -167,6 +170,8 @@ def handle(conn, addr):
                             st.pids = set() if q["pids"] == "none" else set(int(x) for x in q["pids"].split(","))
                     if "addpids" in q:
                         st.pids |= set(int(x) for x in q["addpids"].split(","))
+                        if "pidstall" in FLAGS and "200" in q["addpids"].split(","):
+                            st.pidstall = True
                     if "delpids" in q:
                         st.pids -= set(int(x) for x in q["delpids"].split(","))
                     st.started = True

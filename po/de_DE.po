@@ -125,3 +125,12 @@ msgstr "  RTP-Pakete %lu, verloren %lu (%.2f%%), umsortiert %lu"
 
 msgid "  Longest pause between packets: %lu ms now, %lu ms since tuning"
 msgstr "  Längste Pause zwischen Paketen: %lu ms aktuell, %lu ms seit dem Tunen"
+
+msgid "  Pauses of 200 ms or more: %lu, after a PLAY request: %lu"
+msgstr "  Pausen ab 200 ms: %lu, nach einer PLAY-Anfrage: %lu"
+
+msgid "  RTP receive buffer: %d KiB"
+msgstr "  RTP-Empfangspuffer: %d KiB"
+
+msgid "  RTP receive buffer: automatic (TCP)"
+msgstr "  RTP-Empfangspuffer: automatisch (TCP)"

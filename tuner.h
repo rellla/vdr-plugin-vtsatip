@@ -48,6 +48,11 @@ class cVtTuner;
 
 class cVtReceiver : public cThread {
 private:
+  enum {
+    eDefaultRcvBuf  = 2 * 1024 * 1024, // RTP socket receive buffer without -r
+    ePauseMs        = 200,             // a longer gap between two packets is counted and logged as a pause
+    ePlayRelationMs = 2000             // a pause up to this time after a PLAY request is logged as related to it
+  };
   cVtTuner &tunerM;
   cMutex sockMutexM;         // protects the sockets, they are replaced when a stream goes multicast
   std::atomic<int> changersM; // threads waiting to replace the sockets; the receive loop lets them go first
@@ -60,6 +65,7 @@ private:
   int rtpFdM;
   int rtcpFdM;
   std::atomic<int> rtpPortM;
+  std::atomic<int> rcvBufM;  // receive buffer the RTP socket really got (bytes)
   bool multicastM;
   std::atomic<cVtRtsp *> tcpRtspM;   // RTP over TCP: the RTSP connection carries the stream
   std::atomic<int> tcpRtpChM;
@@ -82,6 +88,10 @@ private:
   uint64_t windowStartUsM;
   unsigned long windowGapUsM;
   unsigned long windowBytesM;
+  std::atomic<uint64_t> lastPlayUsM;         // time of the last PLAY request (0 = none)
+  std::atomic<unsigned long> pausesM;        // pauses of at least ePauseMs since the (re)tune
+  std::atomic<unsigned long> playPausesM;    // ... of them related to a PLAY request
+  void LogPause(unsigned long gapUsP, uint64_t startUsP, uint64_t endUsP);
   static uint64_t NowUs(void);
   void TrackTiming(int bytesP);
   static void OnInterleaved(void *ctxP, int channelP, const uchar *dataP, int lengthP);
@@ -98,7 +108,11 @@ public:
   bool OpenMulticast(const std::string &groupP, const std::string &sourceP, int rtpPortP, int rtcpPortP);
   void ResetUnicast(void) { Open(); }
   // forget the expected sequence number (new session or retune, the server may start a new numbering)
-  void ResetSequence(void) { resetSeqM = true; resetTimingM = true; lastPacketUsM = 0; gapMaxUsM = 0; gapRecentUsM = 0; rateKbitM = 0; }
+  void ResetSequence(void) { resetSeqM = true; resetTimingM = true; lastPacketUsM = 0; gapMaxUsM = 0; gapRecentUsM = 0; rateKbitM = 0; pausesM = 0; playPausesM = 0; }
+  // a PLAY request (tuning or PID change) is sent now, a following pause is logged in relation to it
+  void MarkPlay(void) { lastPlayUsM = NowUs(); }
+  unsigned long Pauses(void) const { return pausesM.load(); }
+  unsigned long PlayPauses(void) const { return playPausesM.load(); }
   // data rate (kbit/s) and longest gap between two packets (ms) in the last ~2 s and since the
   // tuning; a stall that is going on now counts, so a stopped stream shows up at once
   unsigned long RateKbit(void) const;
@@ -109,6 +123,7 @@ public:
   unsigned long Packets(void) const { return packetsM.load(); }
   unsigned long Lost(void) const { return lostM.load(); }
   unsigned long Reordered(void) const { return reorderedM.load(); }
+  int RcvBuf(void) const { return rcvBufM.load(); }
   // RTP over TCP: read the stream from the RTSP connection (NULL = back to the UDP sockets)
   void SetTcp(cVtRtsp *rtspP, int rtpChannelP = 0, int rtcpChannelP = 1);
   bool IsMulticast(void) const { return multicastM; }
@@ -177,6 +192,8 @@ private:
   bool DoTune(const std::string &paramsP, const std::set<int> &pidsP, const std::set<int> &pmtP, int ciSlotP,
               const std::string &hostP, int portP);
   bool DoPids(const std::set<int> &wantP, const std::set<int> &pmtP, int ciSlotP);
+  // every PLAY request goes through here, so the receiver can relate pauses to it
+  bool SendPlay(const char *queryP) { receiverM.MarkPlay(); return rtspM.Play(queryP); }
   void DoRelease(void);
   bool StreamStalled(void);           // control thread: the stream delivers nothing any more
   void DropSession(void);
@@ -205,6 +222,10 @@ public:
   unsigned long RateKbit(void) const { return sessionUpM.load() ? receiverM.RateKbit() : 0; }
   unsigned long GapMs(void) const { return sessionUpM.load() ? receiverM.GapMs() : 0; }
   unsigned long GapMaxMs(void) const { return sessionUpM.load() ? receiverM.GapMaxMs() : 0; }
+  // RTP over TCP: the buffer of the RTSP connection (0 = tuned by the kernel)
+  int RcvBufKiB(void) const { return (transportModeM.load() == VTSATIP_TRANSPORT_TCP ? rtspM.RcvBuf() : receiverM.RcvBuf()) / 1024; }
+  unsigned long Pauses(void) const { return sessionUpM.load() ? receiverM.Pauses() : 0; }
+  unsigned long PlayPauses(void) const { return sessionUpM.load() ? receiverM.PlayPauses() : 0; }
   int TransportMode(void) const { return transportModeM.load(); }
   unsigned long Bytes(void) const { return bytesM.load(); }
   int FrontendId(void) const { return frontendM.load(); }

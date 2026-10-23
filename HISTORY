@@ -1,6 +1,17 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-23: Version 0.7.10
+- The RTP receive buffer is set with SO_RCVBUFFORCE if allowed (CAP_NET_ADMIN),
+  the kernel cut it down to net.core.rmem_max (about 208 KiB) before. The size
+  the socket really got is shown as rcvbuf= in SVDRP INFO and on the statistics
+  page, a cut buffer is logged once. With RTP over TCP the kernel tunes the
+  buffer of the connection (rcvbuf=auto), unless -r sets it.
+- Pauses of 200 ms or more between two RTP packets are counted (pauses=) and
+  logged with their relation to the last PLAY request; pauses up to 2 s after a
+  PLAY request are counted separately (playpauses=), to find out whether the
+  server stops the stream when the PIDs change.
+
 2026-10-23: Version 0.7.9
 - The default for releasing an unused stream is 30 seconds (was 20; the EPG
   scanner steps every 20 s, so a device in a scan pass was released and set up
