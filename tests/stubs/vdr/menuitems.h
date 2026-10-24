@@ -3,7 +3,7 @@
 #include "device.h"
 #include "i18n.h"
 enum eKeys { kNone, kOk, kBack, kRed, kGreen, kYellow, kBlue, kInfo };
-enum eOSState { osUnknown, osContinue, osBack, osEnd, osUser1 };
+enum eOSState { osUnknown, osContinue, osBack, osEnd, os_User, osUser1 };
 enum eMenuCategory { mcUndefined, mcSetupPlugins, mcText };
 enum eMessageType { mtInfo, mtWarning, mtError };
 struct cSkins { void Message(eMessageType, const char *) {} };

@@ -1,6 +1,13 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-25: Version 0.7.12
+- No more flicker of the setup menu when OK is pressed in the plugin's pages
+  (opening "Statistics...", OK in the statistics page, ending the editing of an
+  item). VDR's plugin setup list stores the setup and rebuilds the OSD whenever
+  a plugin page answers OK with osContinue; the pages answer os_User now, which
+  no menu of VDR reacts to.
+
 2026-10-24: Version 0.7.11
 - The statistics page can be scrolled: its lines were not selectable, so the
   cursor and with it the page could not move, and the page went back to the top
