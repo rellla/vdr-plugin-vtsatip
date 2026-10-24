@@ -277,7 +277,9 @@ signal strength and quality, transport (UDP/multicast/TCP), data rate and
 total, RTP packets, lost and reordered packets (with the loss in percent),
 the longest pause between two packets (now / since tuning), the number of
 pauses of 200 ms or more (and how many of them followed a PLAY request), the
-receive buffer of the RTP socket, followed by the known servers. The page refreshes once a second.
+receive buffer of the RTP socket, followed by the known servers. The page
+refreshes once a second and can be scrolled with the cursor keys (since
+0.7.11).
 
 setup.conf keys (vtsatip.<name>): EnableCIExtension, CIRestart, CAIDs, SIDs,
 CISlotDevice0..n, FrontendDevice0..n, EpgScanDevice0..n (-1/0/1), Discovery (-1/0/1), EnableEITScan,

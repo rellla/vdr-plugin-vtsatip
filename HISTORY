@@ -1,6 +1,12 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-24: Version 0.7.11
+- The statistics page can be scrolled: its lines were not selectable, so the
+  cursor and with it the page could not move, and the page went back to the top
+  at every refresh. The lines are selectable now and the cursor stays on its
+  line when the page is rebuilt.
+
 2026-10-23: Version 0.7.10
 - The RTP receive buffer is set with SO_RCVBUFFORCE if allowed (CAP_NET_ADMIN),
   the kernel cut it down to net.core.rmem_max (about 208 KiB) before. The size

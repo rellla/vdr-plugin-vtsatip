@@ -14,7 +14,7 @@ class cOsdMenu {
 public:
   cOsdMenu(const char * = NULL, int = 0, int = 0, int = 0, int = 0, int = 0) {}
   eOSState AddSubMenu(cOsdMenu *m) { delete m; return osContinue; }
-  void Clear() {} void Add(cOsdItem *) {} cOsdItem *Get(int) { return NULL; } int Current() { return 0; } void SetCurrent(cOsdItem *) {}
+  void Clear() {} void Add(cOsdItem *, bool = false) {} int Count() { return 0; } cOsdItem *Get(int) { return NULL; } int Current() { return 0; } void SetCurrent(cOsdItem *) {}
   virtual void Display() {} void SetHelp(const char *, const char *, const char *, const char *) {} void SetMenuCategory(eMenuCategory) {}
   virtual eOSState ProcessKey(eKeys) { return osUnknown; } virtual ~cOsdMenu() {}
 };

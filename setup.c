@@ -34,7 +34,12 @@ cMenuVtSatipStats::cMenuVtSatipStats(void)
 
 void cMenuVtSatipStats::Fill(void)
 {
+  // The lines can be selected, so that the cursor (and with it the page) can be moved when the list is longer
+  // than the screen. The page is built again every second; VDR keeps the position if the cursor stays on the
+  // same line.
+  int cur = Current() < 0 ? 0 : Current();
   Clear();
+  int n = 0;
   uint64_t now = cTimeMs::Now();
   double secs = lastTimeM ? (now - lastTimeM) / 1000.0 : 0;
   lastTimeM = now;
@@ -43,30 +48,32 @@ void cMenuVtSatipStats::Fill(void)
       if (!cVtSatipDevice::GetStats(i, st))
          continue;
       const char *state = st.detached ? tr("detached") : !st.session ? tr("idle") : st.lock ? tr("locked") : tr("no lock");
-      Add(new cOsdItem(*cString::sprintf(tr("Device %d: %s (%s)"), i + 1, st.server.empty() ? "-" : st.server.c_str(), state), osUnknown, false));
+      Add(new cOsdItem(*cString::sprintf(tr("Device %d: %s (%s)"), i + 1, st.server.empty() ? "-" : st.server.c_str(), state), osUnknown, true), n++ == cur);
       if (st.session) {
          if (!st.channel.empty())
-            Add(new cOsdItem(*cString::sprintf(tr("  Channel: %s"), st.channel.c_str()), osUnknown, false));
+            Add(new cOsdItem(*cString::sprintf(tr("  Channel: %s"), st.channel.c_str()), osUnknown, true), n++ == cur);
          static const char *const transports[] = { "UDP", "multicast", "TCP" };
          Add(new cOsdItem(*cString::sprintf(tr("  Frontend %d, signal %d%%, quality %d%%, %s"), st.frontend, st.strength < 0 ? 0 : st.strength,
-                                            st.quality < 0 ? 0 : st.quality, transports[st.transport % 3]), osUnknown, false));
+                                            st.quality < 0 ? 0 : st.quality, transports[st.transport % 3]), osUnknown, true), n++ == cur);
          double mbit = (secs > 0 && st.bytes >= lastBytesM[i]) ? (st.bytes - lastBytesM[i]) * 8.0 / 1e6 / secs : 0;
-         Add(new cOsdItem(*cString::sprintf(tr("  %.1f Mbit/s, total %.1f MB"), mbit, st.bytes / 1e6), osUnknown, false));
+         Add(new cOsdItem(*cString::sprintf(tr("  %.1f Mbit/s, total %.1f MB"), mbit, st.bytes / 1e6), osUnknown, true), n++ == cur);
          double pct = (st.packets + st.lost) ? 100.0 * st.lost / (st.packets + st.lost) : 0;
-         Add(new cOsdItem(*cString::sprintf(tr("  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"), st.packets, st.lost, pct, st.reordered), osUnknown, false));
-         Add(new cOsdItem(*cString::sprintf(tr("  Longest pause between packets: %lu ms now, %lu ms since tuning"), st.gapMs, st.gapMaxMs), osUnknown, false));
-         Add(new cOsdItem(*cString::sprintf(tr("  Pauses of 200 ms or more: %lu, after a PLAY request: %lu"), st.pauses, st.playPauses), osUnknown, false));
+         Add(new cOsdItem(*cString::sprintf(tr("  RTP packets %lu, lost %lu (%.2f%%), reordered %lu"), st.packets, st.lost, pct, st.reordered), osUnknown, true), n++ == cur);
+         Add(new cOsdItem(*cString::sprintf(tr("  Longest pause between packets: %lu ms now, %lu ms since tuning"), st.gapMs, st.gapMaxMs), osUnknown, true), n++ == cur);
+         Add(new cOsdItem(*cString::sprintf(tr("  Pauses of 200 ms or more: %lu, after a PLAY request: %lu"), st.pauses, st.playPauses), osUnknown, true), n++ == cur);
          if (st.rcvBufKiB > 0)
-            Add(new cOsdItem(*cString::sprintf(tr("  RTP receive buffer: %d KiB"), st.rcvBufKiB), osUnknown, false));
+            Add(new cOsdItem(*cString::sprintf(tr("  RTP receive buffer: %d KiB"), st.rcvBufKiB), osUnknown, true), n++ == cur);
          else if (st.transport == VTSATIP_TRANSPORT_TCP)
-            Add(new cOsdItem(tr("  RTP receive buffer: automatic (TCP)"), osUnknown, false));
+            Add(new cOsdItem(tr("  RTP receive buffer: automatic (TCP)"), osUnknown, true), n++ == cur);
          }
       lastBytesM[i] = st.bytes;
       }
-  Add(new cOsdItem(tr("Known SAT>IP servers:"), osUnknown, false));
+  Add(new cOsdItem(tr("Known SAT>IP servers:"), osUnknown, true), n++ == cur);
   std::vector<std::string> lines = cVtServers::Get()->InfoLines();
   for (size_t i = 0; i < lines.size(); ++i)
-      Add(new cOsdItem(lines[i].c_str(), osUnknown, false));
+      Add(new cOsdItem(lines[i].c_str(), osUnknown, true), n++ == cur);
+  if (Current() < 0 && Count() > 0) // the list became shorter
+     SetCurrent(Get(Count() - 1));
   Display();
 }
 
