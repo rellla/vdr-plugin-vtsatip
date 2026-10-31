@@ -77,20 +77,11 @@ void cMenuVtSatipStats::Fill(void)
   Display();
 }
 
-// VDR's plugin setup list (cMenuSetupPlugins) stores the setup and rebuilds the OSD and skin (a flicker) whenever
-// a plugin page answers OK with osContinue. A handled OK therefore answers with os_User, which no menu of VDR
-// reacts to.
-static eOSState HandledKey(eKeys keyP, eOSState stateP)
-{
-  return (keyP == kOk && stateP == osContinue) ? os_User : stateP;
-}
-
 eOSState cMenuVtSatipStats::ProcessKey(eKeys keyP)
 {
   eOSState state = cOsdMenu::ProcessKey(keyP);
   if (state == osUnknown)
      state = osContinue;
-  state = HandledKey(keyP, state);
   if (keyP == kNone && refreshM.TimedOut()) {
      Fill();
      refreshM.Set(1000);
@@ -174,7 +165,7 @@ eOSState cMenuSetupVtSatip::ProcessKey(eKeys keyP)
   int oldCi = ciExtensionM;
   eOSState state = cMenuSetupPage::ProcessKey(keyP);
   if (state == osUser1)
-     return HandledKey(keyP, AddSubMenu(new cMenuVtSatipStats));
+     return AddSubMenu(new cMenuVtSatipStats);
   if (state == osUnknown) {
      if (keyP == kRed) {
         VtSatipRescan();
@@ -186,7 +177,7 @@ eOSState cMenuSetupVtSatip::ProcessKey(eKeys keyP)
      Setup(); // show or hide the CI items
   else if (keyP == kNone && cVtServers::Get()->InfoLines().size() != serverLinesM)
      Setup(); // a server appeared or vanished
-  return HandledKey(keyP, state);
+  return state;
 }
 
 void cMenuSetupVtSatip::Store(void)
