@@ -1,6 +1,12 @@
 VDR Plugin 'vtsatip' Revision History
 -------------------------------------
 
+2026-10-31: Version 0.7.13
+- The workaround of 0.7.12 is removed again. VDR 2.8.4 does not rebuild the OSD
+  any more when a sub menu of a plugin's setup page answers OK; the pages answer
+  osContinue to a handled OK again. With older VDR versions the setup menu
+  flickers on OK as before.
+
 2026-10-25: Version 0.7.12
 - No more flicker of the setup menu when OK is pressed in the plugin's pages
   (opening "Statistics...", OK in the statistics page, ending the editing of an
